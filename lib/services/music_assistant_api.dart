@@ -73,50 +73,28 @@ class MusicAssistantAPI {
       // Construct WebSocket URL with proper port handling
       final uri = Uri.parse(wsUrl);
 
-      Uri finalUri;
       if (_cachedCustomPort != null) {
         // Use custom port from settings
-        finalUri = Uri(
-          scheme: uri.scheme,
-          host: uri.host,
-          port: _cachedCustomPort,
-          path: '/ws',
-        );
+        wsUrl = '${uri.scheme}://${uri.host}:$_cachedCustomPort/ws';
         _logger.log('Using custom WebSocket port from settings: $_cachedCustomPort');
       } else if (uri.hasPort) {
         // Port is already specified in URL, keep it
-        finalUri = Uri(
-          scheme: uri.scheme,
-          host: uri.host,
-          port: uri.port,
-          path: '/ws',
-        );
+        wsUrl = '${uri.scheme}://${uri.host}:${uri.port}/ws';
         _logger.log('Using port from URL: ${uri.port}');
       } else {
         // No port specified
         if (!useSecure) {
           // For WS (unsecure WebSocket), add Music Assistant default port 8095
-          finalUri = Uri(
-            scheme: uri.scheme,
-            host: uri.host,
-            port: 8095,
-            path: '/ws',
-          );
+          wsUrl = '${uri.scheme}://${uri.host}:8095/ws';
           _logger.log('Using port 8095 for unsecure connection');
         } else {
           // For WSS (secure WebSocket), DON'T specify port - use implicit default
           // This is critical for Cloudflare WebSocket support
-          finalUri = Uri(
-            scheme: uri.scheme,
-            host: uri.host,
-            // NO PORT - let it use default 443 implicitly
-            path: '/ws',
-          );
+          // We must manually construct the URL string to avoid port :0
+          wsUrl = '${uri.scheme}://${uri.host}/ws';
           _logger.log('Using implicit default port (443) for secure connection');
         }
       }
-
-      wsUrl = finalUri.toString();
 
       _logger.log('Attempting ${useSecure ? "secure (WSS)" : "unsecure (WS)"} connection');
       _logger.log('Final WebSocket URL: $wsUrl');
