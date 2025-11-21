@@ -101,12 +101,30 @@ class MusicAssistantAPI {
       _logger.log('Attempting ${useSecure ? "secure (WSS)" : "unsecure (WS)"} connection');
       _logger.log('Final WebSocket URL: $wsUrl');
 
-      // Use native dart:io WebSocket for better control
-      _logger.log('Connecting to: ${uri.host}:${uri.hasPort ? uri.port : (useSecure ? 443 : 80)}${uri.path}');
+      // Construct a proper Uri with explicit port to avoid port 0 issue
+      // WebSocket.connect() needs a Uri, not a string, to properly handle ports
+      final int port;
+      if (_cachedCustomPort != null) {
+        port = _cachedCustomPort!;
+      } else if (uri.hasPort && uri.port != 0) {
+        port = uri.port;
+      } else {
+        // Default ports based on scheme
+        port = useSecure ? 443 : 8095;
+      }
+
+      final connectionUri = Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: port,
+        path: uri.path,
+      );
+
+      _logger.log('Connecting to: ${connectionUri.host}:${connectionUri.port}${connectionUri.path}');
 
       // Connect using native WebSocket with custom headers
       final webSocket = await WebSocket.connect(
-        wsUrl,
+        connectionUri,
         headers: {
           'User-Agent': 'MusicAssistantMobile/1.0',
         },
