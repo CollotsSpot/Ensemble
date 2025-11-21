@@ -64,9 +64,21 @@ class MusicAssistantAPI {
       }
 
       // Add port if not present
-      if (!wsUrl.contains(':8095') && !wsUrl.contains(':443') && !wsUrl.contains(':80')) {
-        final uri = Uri.parse(wsUrl);
-        wsUrl = '${uri.scheme}://${uri.host}:8095${uri.path}';
+      final uri = Uri.parse(wsUrl);
+      if (uri.hasPort) {
+        // Port is already specified, keep it
+        _logger.log('Using specified port: ${uri.port}');
+      } else {
+        // No port specified, use defaults based on protocol
+        if (useSecure) {
+          // For WSS (secure WebSocket), default to standard HTTPS port 443
+          wsUrl = '${uri.scheme}://${uri.host}:443${uri.path}';
+          _logger.log('No port specified, defaulting to 443 for secure connection');
+        } else {
+          // For WS (unsecure WebSocket), default to Music Assistant default 8095
+          wsUrl = '${uri.scheme}://${uri.host}:8095${uri.path}';
+          _logger.log('No port specified, defaulting to 8095 for unsecure connection');
+        }
       }
 
       // Add /ws path for WebSocket endpoint
