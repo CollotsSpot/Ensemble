@@ -123,8 +123,9 @@ class MusicAssistantAPI {
       _logger.log('Connecting to: ${connectionUri.host}:${connectionUri.port}${connectionUri.path}');
 
       // Connect using native WebSocket with custom headers
+      // Convert Uri to string - the port is now explicit in the Uri, so toString() will include it
       final webSocket = await WebSocket.connect(
-        connectionUri,
+        connectionUri.toString(),
         headers: {
           'User-Agent': 'MusicAssistantMobile/1.0',
         },
