@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/music_assistant_provider.dart';
 import '../services/music_assistant_api.dart';
+import 'debug_log_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -93,6 +94,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report_rounded),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DebugLogScreen(),
+                ),
+              );
+            },
+            color: Colors.white,
+            tooltip: 'Debug Logs',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -250,6 +266,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
+
+            const SizedBox(height: 32),
+
+            // Debug logs button
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DebugLogScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.bug_report_rounded),
+                label: const Text('View Debug Logs'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white38),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
 
             const SizedBox(height: 32),
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:uuid/uuid.dart';
 import '../models/media_item.dart';
+import 'debug_logger.dart';
 
 enum MAConnectionState {
   disconnected,
@@ -15,6 +16,7 @@ class MusicAssistantAPI {
   final String serverUrl;
   WebSocketChannel? _channel;
   final _uuid = const Uuid();
+  final _logger = DebugLogger();
 
   final _connectionStateController = StreamController<MAConnectionState>.broadcast();
   Stream<MAConnectionState> get connectionState => _connectionStateController.stream;
@@ -62,7 +64,7 @@ class MusicAssistantAPI {
         wsUrl = '$wsUrl/ws';
       }
 
-      print('Connecting to Music Assistant at: $wsUrl');
+      _logger.log('Connecting to Music Assistant at: $wsUrl');
 
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
 
@@ -73,12 +75,12 @@ class MusicAssistantAPI {
       _channel!.stream.listen(
         _handleMessage,
         onError: (error) {
-          print('WebSocket error: $error');
+          _logger.log('WebSocket error: $error');
           _updateConnectionState(MAConnectionState.error);
           _reconnect();
         },
         onDone: () {
-          print('WebSocket connection closed');
+          _logger.log('WebSocket connection closed');
           _updateConnectionState(MAConnectionState.disconnected);
           _connectionCompleter?.completeError(Exception('Connection closed'));
           _reconnect();
@@ -93,9 +95,9 @@ class MusicAssistantAPI {
         },
       );
 
-      print('Connected to Music Assistant successfully');
+      _logger.log('Connected to Music Assistant successfully');
     } catch (e) {
-      print('Connection error: $e');
+      _logger.log('Connection error: $e');
       _updateConnectionState(MAConnectionState.error);
       rethrow;
     }
@@ -104,11 +106,11 @@ class MusicAssistantAPI {
   void _handleMessage(dynamic message) {
     try {
       final data = jsonDecode(message as String) as Map<String, dynamic>;
-      print('Received message: ${data.keys}');
+      _logger.log('Received message: ${data.keys}');
 
       // Check for server info message (first message on connect)
       if (data.containsKey('server_version')) {
-        print('Received server info: ${data['server_version']}');
+        _logger.log('Received server info: ${data['server_version']}');
         _updateConnectionState(MAConnectionState.connected);
         _connectionCompleter?.complete();
         return;
@@ -121,7 +123,7 @@ class MusicAssistantAPI {
         final completer = _pendingRequests.remove(messageId);
 
         if (data.containsKey('error_code')) {
-          print('Command error: ${data['error_code']} - ${data['details']}');
+          _logger.log('Command error: ${data['error_code']} - ${data['details']}');
           completer!.completeError(
             Exception('${data['error_code']}: ${data['details']}'),
           );
@@ -134,11 +136,11 @@ class MusicAssistantAPI {
       // Handle event
       final eventType = data['event'] as String?;
       if (eventType != null) {
-        print('Event received: $eventType');
+        _logger.log('Event received: $eventType');
         _eventStreams[eventType]?.add(data['data'] as Map<String, dynamic>);
       }
     } catch (e) {
-      print('Error handling message: $e');
+      _logger.log('Error handling message: $e');
     }
   }
 
@@ -180,7 +182,7 @@ class MusicAssistantAPI {
     bool? favoriteOnly,
   }) async {
     try {
-      print('Fetching artists with limit=$limit, offset=$offset, search=$search');
+      _logger.log('Fetching artists with limit=$limit, offset=$offset, search=$search');
       final response = await _sendCommand(
         'music/artists/library_items',
         args: {
@@ -191,19 +193,19 @@ class MusicAssistantAPI {
         },
       );
 
-      print('Artists response: ${response.keys}');
+      _logger.log('Artists response: ${response.keys}');
       final items = response['result'] as List<dynamic>?;
       if (items == null) {
-        print('No result field in response');
+        _logger.log('No result field in response');
         return [];
       }
 
-      print('Got ${items.length} artists');
+      _logger.log('Got ${items.length} artists');
       return items
           .map((item) => Artist.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Error getting artists: $e');
+      _logger.log('Error getting artists: $e');
       return [];
     }
   }
@@ -216,7 +218,7 @@ class MusicAssistantAPI {
     String? artistId,
   }) async {
     try {
-      print('Fetching albums with limit=$limit, offset=$offset');
+      _logger.log('Fetching albums with limit=$limit, offset=$offset');
       final response = await _sendCommand(
         'music/albums/library_items',
         args: {
@@ -235,7 +237,7 @@ class MusicAssistantAPI {
           .map((item) => Album.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Error getting albums: $e');
+      _logger.log('Error getting albums: $e');
       return [];
     }
   }
@@ -249,7 +251,7 @@ class MusicAssistantAPI {
     String? albumId,
   }) async {
     try {
-      print('Fetching tracks with limit=$limit, offset=$offset');
+      _logger.log('Fetching tracks with limit=$limit, offset=$offset');
       final response = await _sendCommand(
         'music/tracks/library_items',
         args: {
@@ -265,12 +267,12 @@ class MusicAssistantAPI {
       final items = response['result'] as List<dynamic>?;
       if (items == null) return [];
 
-      print('Got ${items.length} tracks');
+      _logger.log('Got ${items.length} tracks');
       return items
           .map((item) => Track.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Error getting tracks: $e');
+      _logger.log('Error getting tracks: $e');
       return [];
     }
   }
@@ -290,14 +292,14 @@ class MusicAssistantAPI {
 
       return Album.fromJson(result as Map<String, dynamic>);
     } catch (e) {
-      print('Error getting album details: $e');
+      _logger.log('Error getting album details: $e');
       return null;
     }
   }
 
   Future<List<Track>> getAlbumTracks(String provider, String itemId) async {
     try {
-      print('Fetching album tracks for provider=$provider, itemId=$itemId');
+      _logger.log('Fetching album tracks for provider=$provider, itemId=$itemId');
       final response = await _sendCommand(
         'music/albums/album_tracks',
         args: {
@@ -308,16 +310,16 @@ class MusicAssistantAPI {
 
       final items = response['result'] as List<dynamic>?;
       if (items == null) {
-        print('No result for album tracks');
+        _logger.log('No result for album tracks');
         return [];
       }
 
-      print('Got ${items.length} album tracks');
+      _logger.log('Got ${items.length} album tracks');
       return items
           .map((item) => Track.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Error getting album tracks: $e');
+      _logger.log('Error getting album tracks: $e');
       return [];
     }
   }
@@ -350,7 +352,7 @@ class MusicAssistantAPI {
             [],
       };
     } catch (e) {
-      print('Error searching: $e');
+      _logger.log('Error searching: $e');
       return {'artists': [], 'albums': [], 'tracks': []};
     }
   }
@@ -396,7 +398,7 @@ class MusicAssistantAPI {
       try {
         await connect();
       } catch (e) {
-        print('Reconnection failed: $e');
+        _logger.log('Reconnection failed: $e');
       }
     }
   }
