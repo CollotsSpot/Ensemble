@@ -25,6 +25,8 @@ class MusicAssistantAPI {
   final Map<String, Completer<Map<String, dynamic>>> _pendingRequests = {};
   final Map<String, StreamController<Map<String, dynamic>>> _eventStreams = {};
 
+  Completer<void>? _connectionCompleter;
+
   MusicAssistantAPI(this.serverUrl);
 
   Future<void> connect() async {
@@ -64,6 +66,9 @@ class MusicAssistantAPI {
 
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
 
+      // Wait for server info message before considering connected
+      _connectionCompleter = Completer<void>();
+
       // Listen to messages
       _channel!.stream.listen(
         _handleMessage,
@@ -75,15 +80,20 @@ class MusicAssistantAPI {
         onDone: () {
           print('WebSocket connection closed');
           _updateConnectionState(MAConnectionState.disconnected);
+          _connectionCompleter?.completeError(Exception('Connection closed'));
           _reconnect();
         },
       );
 
-      // Wait a bit to see if connection succeeds
-      await Future.delayed(const Duration(milliseconds: 500));
-      _updateConnectionState(MAConnectionState.connected);
+      // Wait for server info message with timeout
+      await _connectionCompleter!.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout - no server info received');
+        },
+      );
 
-      print('Connected to Music Assistant');
+      print('Connected to Music Assistant successfully');
     } catch (e) {
       print('Connection error: $e');
       _updateConnectionState(MAConnectionState.error);
@@ -94,6 +104,16 @@ class MusicAssistantAPI {
   void _handleMessage(dynamic message) {
     try {
       final data = jsonDecode(message as String) as Map<String, dynamic>;
+      print('Received message: ${data.keys}');
+
+      // Check for server info message (first message on connect)
+      if (data.containsKey('server_version')) {
+        print('Received server info: ${data['server_version']}');
+        _updateConnectionState(MAConnectionState.connected);
+        _connectionCompleter?.complete();
+        return;
+      }
+
       final messageId = data['message_id'] as String?;
 
       // Handle response to a request
@@ -101,6 +121,7 @@ class MusicAssistantAPI {
         final completer = _pendingRequests.remove(messageId);
 
         if (data.containsKey('error_code')) {
+          print('Command error: ${data['error_code']} - ${data['details']}');
           completer!.completeError(
             Exception('${data['error_code']}: ${data['details']}'),
           );
@@ -113,6 +134,7 @@ class MusicAssistantAPI {
       // Handle event
       final eventType = data['event'] as String?;
       if (eventType != null) {
+        print('Event received: $eventType');
         _eventStreams[eventType]?.add(data['data'] as Map<String, dynamic>);
       }
     } catch (e) {
@@ -158,19 +180,25 @@ class MusicAssistantAPI {
     bool? favoriteOnly,
   }) async {
     try {
+      print('Fetching artists with limit=$limit, offset=$offset, search=$search');
       final response = await _sendCommand(
-        'music/artists',
+        'music/artists/library_items',
         args: {
           if (limit != null) 'limit': limit,
           if (offset != null) 'offset': offset,
           if (search != null) 'search': search,
-          if (favoriteOnly != null) 'favorite_only': favoriteOnly,
+          if (favoriteOnly != null) 'favorite': favoriteOnly,
         },
       );
 
+      print('Artists response: ${response.keys}');
       final items = response['result'] as List<dynamic>?;
-      if (items == null) return [];
+      if (items == null) {
+        print('No result field in response');
+        return [];
+      }
 
+      print('Got ${items.length} artists');
       return items
           .map((item) => Artist.fromJson(item as Map<String, dynamic>))
           .toList();
@@ -188,13 +216,14 @@ class MusicAssistantAPI {
     String? artistId,
   }) async {
     try {
+      print('Fetching albums with limit=$limit, offset=$offset');
       final response = await _sendCommand(
-        'music/albums',
+        'music/albums/library_items',
         args: {
           if (limit != null) 'limit': limit,
           if (offset != null) 'offset': offset,
           if (search != null) 'search': search,
-          if (favoriteOnly != null) 'favorite_only': favoriteOnly,
+          if (favoriteOnly != null) 'favorite': favoriteOnly,
           if (artistId != null) 'artist': artistId,
         },
       );
@@ -220,13 +249,14 @@ class MusicAssistantAPI {
     String? albumId,
   }) async {
     try {
+      print('Fetching tracks with limit=$limit, offset=$offset');
       final response = await _sendCommand(
-        'music/tracks',
+        'music/tracks/library_items',
         args: {
           if (limit != null) 'limit': limit,
           if (offset != null) 'offset': offset,
           if (search != null) 'search': search,
-          if (favoriteOnly != null) 'favorite_only': favoriteOnly,
+          if (favoriteOnly != null) 'favorite': favoriteOnly,
           if (artistId != null) 'artist': artistId,
           if (albumId != null) 'album': albumId,
         },
@@ -235,6 +265,7 @@ class MusicAssistantAPI {
       final items = response['result'] as List<dynamic>?;
       if (items == null) return [];
 
+      print('Got ${items.length} tracks');
       return items
           .map((item) => Track.fromJson(item as Map<String, dynamic>))
           .toList();
@@ -266,17 +297,22 @@ class MusicAssistantAPI {
 
   Future<List<Track>> getAlbumTracks(String provider, String itemId) async {
     try {
+      print('Fetching album tracks for provider=$provider, itemId=$itemId');
       final response = await _sendCommand(
-        'music/album/tracks',
+        'music/albums/album_tracks',
         args: {
-          'provider': provider,
+          'provider_instance_id_or_domain': provider,
           'item_id': itemId,
         },
       );
 
       final items = response['result'] as List<dynamic>?;
-      if (items == null) return [];
+      if (items == null) {
+        print('No result for album tracks');
+        return [];
+      }
 
+      print('Got ${items.length} album tracks');
       return items
           .map((item) => Track.fromJson(item as Map<String, dynamic>))
           .toList();
