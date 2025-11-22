@@ -5,6 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:uuid/uuid.dart';
 import '../models/media_item.dart';
+import '../models/player.dart';
 import 'debug_logger.dart';
 import 'settings_service.dart';
 
@@ -444,6 +445,206 @@ class MusicAssistantAPI {
       return {'artists': [], 'albums': [], 'tracks': []};
     }
   }
+
+  // ============================================================================
+  // PLAYER AND QUEUE MANAGEMENT (Queue-based streaming for full track playback)
+  // ============================================================================
+
+  /// Get all available players
+  Future<List<Player>> getPlayers() async {
+    try {
+      _logger.log('Fetching available players...');
+      final response = await _sendCommand('players/all');
+
+      final items = response['result'] as List<dynamic>?;
+      if (items == null) return [];
+
+      final players = items
+          .map((item) => Player.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      _logger.log('Got ${players.length} players');
+      return players;
+    } catch (e) {
+      _logger.log('Error getting players: $e');
+      return [];
+    }
+  }
+
+  /// Get player queue
+  Future<PlayerQueue?> getQueue(String playerId) async {
+    try {
+      _logger.log('Fetching queue for player: $playerId');
+      final response = await _sendCommand(
+        'players/queue/items',
+        args: {'player_id': playerId},
+      );
+
+      final result = response['result'];
+      if (result == null) return null;
+
+      return PlayerQueue.fromJson(result as Map<String, dynamic>);
+    } catch (e) {
+      _logger.log('Error getting queue: $e');
+      return null;
+    }
+  }
+
+  /// Play a single track via queue
+  Future<void> playTrack(String playerId, Track track) async {
+    try {
+      // Build URI from provider mappings
+      final uri = _buildTrackUri(track);
+      _logger.log('Playing track via queue: $uri on player $playerId');
+
+      await _sendCommand(
+        'player_command/play_media',
+        args: {
+          'player_id': playerId,
+          'media': [
+            {
+              'uri': uri,
+              'media_type': 'track',
+            }
+          ],
+        },
+      );
+
+      _logger.log('✓ Track queued successfully');
+    } catch (e) {
+      _logger.log('Error playing track: $e');
+      rethrow;
+    }
+  }
+
+  /// Play multiple tracks via queue
+  Future<void> playTracks(String playerId, List<Track> tracks, {int? startIndex}) async {
+    try {
+      final mediaItems = tracks.map((track) {
+        final uri = _buildTrackUri(track);
+        return {
+          'uri': uri,
+          'media_type': 'track',
+        };
+      }).toList();
+
+      _logger.log('Playing ${tracks.length} tracks via queue on player $playerId');
+
+      await _sendCommand(
+        'player_command/play_media',
+        args: {
+          'player_id': playerId,
+          'media': mediaItems,
+          if (startIndex != null) 'start_index': startIndex,
+        },
+      );
+
+      _logger.log('✓ ${tracks.length} tracks queued successfully');
+    } catch (e) {
+      _logger.log('Error playing tracks: $e');
+      rethrow;
+    }
+  }
+
+  /// Build track URI from provider mappings
+  String _buildTrackUri(Track track) {
+    // Use provider mappings to get the actual provider instance
+    if (track.providerMappings != null && track.providerMappings!.isNotEmpty) {
+      final mapping = track.providerMappings!.firstWhere(
+        (m) => m.available,
+        orElse: () => track.providerMappings!.first,
+      );
+
+      return '${mapping.providerInstance}://track/${mapping.itemId}';
+    }
+
+    // Fallback to top-level provider/itemId
+    return '${track.provider}://track/${track.itemId}';
+  }
+
+  /// Get current stream URL from queue
+  Future<String?> getCurrentStreamUrl(String playerId) async {
+    try {
+      final queue = await getQueue(playerId);
+      if (queue == null || queue.items.isEmpty) {
+        _logger.log('⚠️ Queue is empty');
+        return null;
+      }
+
+      // Get the current item (or first item if no current index)
+      final currentItem = queue.currentItem ?? queue.items.first;
+
+      if (currentItem.streamdetails == null) {
+        _logger.log('⚠️ No stream details available yet');
+        return null;
+      }
+
+      final streamId = currentItem.streamdetails!.streamId;
+      final contentType = currentItem.streamdetails!.contentType;
+      final extension = _getExtension(contentType);
+
+      // Music Assistant uses port 8097 for streaming (not 8095!)
+      var baseUrl = serverUrl;
+      if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+        baseUrl = 'https://$baseUrl';
+      }
+
+      final uri = Uri.parse(baseUrl);
+      final streamUrl = '${uri.scheme}://${uri.host}:8097/flow/$playerId/$streamId.$extension';
+
+      _logger.log('🎵 Stream URL from queue: $streamUrl');
+      return streamUrl;
+    } catch (e) {
+      _logger.log('Error getting stream URL: $e');
+      return null;
+    }
+  }
+
+  String _getExtension(String contentType) {
+    if (contentType.contains('flac')) return 'flac';
+    if (contentType.contains('mp3')) return 'mp3';
+    if (contentType.contains('aac')) return 'aac';
+    if (contentType.contains('ogg')) return 'ogg';
+    return 'audio';
+  }
+
+  // Player control commands
+  Future<void> pausePlayer(String playerId) async {
+    await _sendPlayerCommand(playerId, 'pause');
+  }
+
+  Future<void> resumePlayer(String playerId) async {
+    await _sendPlayerCommand(playerId, 'play');
+  }
+
+  Future<void> nextTrack(String playerId) async {
+    await _sendPlayerCommand(playerId, 'next');
+  }
+
+  Future<void> previousTrack(String playerId) async {
+    await _sendPlayerCommand(playerId, 'previous');
+  }
+
+  Future<void> stopPlayer(String playerId) async {
+    await _sendPlayerCommand(playerId, 'stop');
+  }
+
+  Future<void> _sendPlayerCommand(String playerId, String command) async {
+    try {
+      _logger.log('Sending player command: $command to $playerId');
+      await _sendCommand(
+        'player_command/$command',
+        args: {'player_id': playerId},
+      );
+    } catch (e) {
+      _logger.log('Error sending player command: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================================
+  // END PLAYER AND QUEUE MANAGEMENT
+  // ============================================================================
 
   // Get stream URL for a track
   String getStreamUrl(String provider, String itemId, {String? uri, List<ProviderMapping>? providerMappings}) {

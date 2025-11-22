@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/media_item.dart';
+import '../models/player.dart';
 import '../services/music_assistant_api.dart';
 import '../services/settings_service.dart';
 
@@ -186,6 +187,54 @@ class MusicAssistantProvider with ChangeNotifier {
   String? getImageUrl(MediaItem item, {int size = 256}) {
     return _api?.getImageUrl(item, size: size);
   }
+
+  // ============================================================================
+  // PLAYER AND QUEUE MANAGEMENT
+  // ============================================================================
+
+  Future<List<Player>> getPlayers() async {
+    return await _api?.getPlayers() ?? [];
+  }
+
+  Future<PlayerQueue?> getQueue(String playerId) async {
+    return await _api?.getQueue(playerId);
+  }
+
+  Future<void> playTrack(String playerId, Track track) async {
+    await _api?.playTrack(playerId, track);
+  }
+
+  Future<void> playTracks(String playerId, List<Track> tracks, {int? startIndex}) async {
+    await _api?.playTracks(playerId, tracks, startIndex: startIndex);
+  }
+
+  Future<String?> getCurrentStreamUrl(String playerId) async {
+    return await _api?.getCurrentStreamUrl(playerId);
+  }
+
+  Future<void> pausePlayer(String playerId) async {
+    await _api?.pausePlayer(playerId);
+  }
+
+  Future<void> resumePlayer(String playerId) async {
+    await _api?.resumePlayer(playerId);
+  }
+
+  Future<void> nextTrack(String playerId) async {
+    await _api?.nextTrack(playerId);
+  }
+
+  Future<void> previousTrack(String playerId) async {
+    await _api?.previousTrack(playerId);
+  }
+
+  Future<void> stopPlayer(String playerId) async {
+    await _api?.stopPlayer(playerId);
+  }
+
+  // ============================================================================
+  // END PLAYER AND QUEUE MANAGEMENT
+  // ============================================================================
 
   @override
   void dispose() {
