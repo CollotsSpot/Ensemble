@@ -69,6 +69,9 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
     final playerProvider = context.read<MusicPlayerProvider>();
 
     final audioTracks = _tracks.map((track) {
+      // Debug: Log track object fields
+      print('🔍 DEBUG Track object - provider: ${track.provider}, itemId: ${track.itemId}, uri: ${track.uri}');
+
       final streamUrl = maProvider.getStreamUrl(track.provider, track.itemId, uri: track.uri);
       return AudioTrack(
         id: track.itemId,

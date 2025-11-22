@@ -344,6 +344,12 @@ class MusicAssistantAPI {
       if (items == null) return [];
 
       _logger.log('Got ${items.length} tracks');
+
+      // Debug: Log the first track's raw data to see what fields are available
+      if (items.isNotEmpty) {
+        _logger.log('🔍 DEBUG: First track raw data: ${items[0]}');
+      }
+
       return items
           .map((item) => Track.fromJson(item as Map<String, dynamic>))
           .toList();
@@ -391,6 +397,12 @@ class MusicAssistantAPI {
       }
 
       _logger.log('Got ${items.length} album tracks');
+
+      // Debug: Log the first track's raw data to see what fields are available
+      if (items.isNotEmpty) {
+        _logger.log('🔍 DEBUG: First album track raw data: ${items[0]}');
+      }
+
       return items
           .map((item) => Track.fromJson(item as Map<String, dynamic>))
           .toList();
