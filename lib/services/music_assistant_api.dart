@@ -464,9 +464,9 @@ class MusicAssistantAPI {
       baseUrl = '${uri.scheme}://${uri.host}:${uri.port}';
     }
 
-    // Music Assistant stream endpoint format
-    // Use provider_instance_id_or_domain and item_id parameters
-    return '$baseUrl/api/stream?provider=$provider&item_id=$itemId&fmt=mp3';
+    // Music Assistant stream endpoint - use /preview endpoint
+    // Format: /preview?item_id={itemId}&provider={provider}
+    return '$baseUrl/preview?item_id=$itemId&provider=$provider';
   }
 
   // Get image URL
