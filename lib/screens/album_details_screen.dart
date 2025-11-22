@@ -43,29 +43,60 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
     final maProvider = context.read<MusicAssistantProvider>();
     final playerProvider = context.read<MusicPlayerProvider>();
 
-    // Convert Music Assistant tracks to AudioTrack objects with stream URLs
-    final audioTracks = _tracks.map((track) {
-      final streamUrl = maProvider.getStreamUrl(
-        track.provider,
-        track.itemId,
-        uri: track.uri,
-        providerMappings: track.providerMappings,
-      );
-      return AudioTrack(
-        id: track.itemId,
-        title: track.name,
-        artist: track.artistsString,
-        album: widget.album.name,
-        filePath: streamUrl,
-        duration: track.duration,
-      );
-    }).toList();
+    try {
+      // 1. Get available players
+      final players = await maProvider.getPlayers();
+      if (players.isEmpty) {
+        _showError('No players available');
+        return;
+      }
 
-    await playerProvider.setPlaylist(audioTracks);
-    await playerProvider.play();
+      // 2. Find the built-in player or use first available
+      final player = players.firstWhere(
+        (p) => p.playerId.contains('builtin') && p.available,
+        orElse: () => players.firstWhere((p) => p.available, orElse: () => players.first),
+      );
 
-    if (mounted) {
-      Navigator.pop(context);
+      print('🎵 Using player: ${player.name} (${player.playerId})');
+
+      // 3. Queue all tracks via Music Assistant WebSocket (starting from index 0)
+      await maProvider.playTracks(player.playerId, _tracks, startIndex: 0);
+      print('✓ Album queued in Music Assistant');
+
+      // 4. Wait a moment for Music Assistant to process the queue
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 5. Get the stream URL from the queue
+      final streamUrl = await maProvider.getCurrentStreamUrl(player.playerId);
+      if (streamUrl == null) {
+        _showError('Failed to get stream URL from queue');
+        return;
+      }
+
+      print('🎵 Stream URL from queue: $streamUrl');
+
+      // 6. Convert tracks to AudioTrack objects with the queue-based stream URL
+      final audioTracks = _tracks.map((track) {
+        return AudioTrack(
+          id: track.itemId,
+          title: track.name,
+          artist: track.artistsString,
+          album: widget.album.name,
+          filePath: streamUrl, // All tracks will use queue-based streaming
+          duration: track.duration,
+        );
+      }).toList();
+
+      // 7. Play via local audio player
+      await playerProvider.setPlaylist(audioTracks);
+      await playerProvider.play();
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      print('Error playing album: $e');
+      _showError('Failed to play album: $e');
     }
   }
 
