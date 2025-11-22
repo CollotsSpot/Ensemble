@@ -504,8 +504,8 @@ class MusicAssistantAPI {
     try {
       _logger.log('Fetching queue for player: $playerId');
       final response = await _sendCommand(
-        'players/queue/items',
-        args: {'player_id': playerId},
+        'player_queues/items',
+        args: {'queue_id': playerId},
       );
 
       final result = response['result'];
