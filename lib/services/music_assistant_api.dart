@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 import 'package:uuid/uuid.dart';
 import '../models/media_item.dart';
 import 'debug_logger.dart';
@@ -135,10 +137,12 @@ class MusicAssistantAPI {
         _logger.log('ℹ️ No authentication configured for WebSocket');
       }
 
-      _channel = WebSocketChannel.connect(
-        Uri.parse(wsUrl),
+      // Use WebSocket.connect with headers, then wrap in IOWebSocketChannel
+      final webSocket = await WebSocket.connect(
+        wsUrl,
         headers: headers.isNotEmpty ? headers : null,
       );
+      _channel = IOWebSocketChannel(webSocket);
 
       // Wait for server info message before considering connected
       _connectionCompleter = Completer<void>();
