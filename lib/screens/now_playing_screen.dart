@@ -50,14 +50,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   Future<void> _toggleShuffle() async {
     if (_queue == null) return;
     final maProvider = context.read<MusicAssistantProvider>();
-    await maProvider.toggleShuffle(_queue!.queueId);
+    await maProvider.toggleShuffle(_queue!.playerId);
     await _loadQueue();
   }
 
   Future<void> _cycleRepeat() async {
     if (_queue == null) return;
     final maProvider = context.read<MusicAssistantProvider>();
-    await maProvider.cycleRepeatMode(_queue!.queueId, _queue!.repeatMode);
+    await maProvider.cycleRepeatMode(_queue!.playerId, _queue!.repeatMode);
     await _loadQueue();
   }
 
