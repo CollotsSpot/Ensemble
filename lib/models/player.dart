@@ -27,13 +27,20 @@ class Player {
   int get volume => volumeLevel ?? 0;
 
   factory Player.fromJson(Map<String, dynamic> json) {
+    // Extract current_item_id from current_media if available
+    String? currentItemId = json['current_item_id'] as String?;
+    if (currentItemId == null && json.containsKey('current_media')) {
+      final currentMedia = json['current_media'] as Map<String, dynamic>?;
+      currentItemId = currentMedia?['queue_item_id'] as String?;
+    }
+
     return Player(
       playerId: json['player_id'] as String,
       name: json['name'] as String,
       available: json['available'] as bool? ?? false,
       powered: json['powered'] as bool? ?? false,
       state: json['state'] as String? ?? 'idle',
-      currentItemId: json['current_item_id'] as String?,
+      currentItemId: currentItemId,
       volumeLevel: json['volume_level'] as int?,
       volumeMuted: json['volume_muted'] as bool?,
     );

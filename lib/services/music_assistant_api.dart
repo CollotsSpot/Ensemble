@@ -725,16 +725,31 @@ class MusicAssistantAPI {
           _logger.log('Fetching queue for player: $playerId');
 
           // Try to get full queue object first
+          // First, get the queue metadata which includes current_index, shuffle, repeat, etc
+          int? currentIndex;
+          bool? shuffleEnabled;
+          String? repeatMode;
+
           try {
             final queueResponse = await _sendCommand(
               'player_queues/get',
               args: {'queue_id': playerId},
             );
             _logger.log('🔍 DEBUG: Queue object response: ${queueResponse.toString()}');
+
+            // Extract metadata from the queue object
+            final queueResult = queueResponse['result'] as Map<String, dynamic>?;
+            if (queueResult != null) {
+              currentIndex = queueResult['current_index'] as int?;
+              shuffleEnabled = queueResult['shuffle_enabled'] as bool?;
+              repeatMode = queueResult['repeat_mode'] as String?;
+              _logger.log('✅ Got queue metadata: currentIndex=$currentIndex, shuffle=$shuffleEnabled, repeat=$repeatMode');
+            }
           } catch (e) {
             _logger.log('⚠️ player_queues/get not available: $e');
           }
 
+          // Now get the queue items
           final response = await _sendCommand(
             'player_queues/items',
             args: {'queue_id': playerId},
@@ -742,20 +757,6 @@ class MusicAssistantAPI {
 
           final result = response['result'];
           if (result == null) return null;
-
-          // Debug: Log the first queue item to see structure
-          if (result is List && result.isNotEmpty) {
-            _logger.log('🔍 DEBUG: First queue item raw data: ${result[0]}');
-          }
-
-          // Debug: Check if there's any current item indicator in the response
-          _logger.log('🔍 DEBUG: Full queue response keys: ${response.keys.toList()}');
-          if (response.containsKey('current_index')) {
-            _logger.log('🔍 DEBUG: Response has current_index: ${response['current_index']}');
-          }
-          if (response.containsKey('current_item')) {
-            _logger.log('🔍 DEBUG: Response has current_item: ${response['current_item']}');
-          }
 
           // The API returns a List of items directly, not a PlayerQueue object
           final items = <QueueItem>[];
@@ -773,54 +774,20 @@ class MusicAssistantAPI {
             return null;
           }
 
-          // Get the player to find current_index from current_item_id
-          final players = await getPlayers();
-          final player = players.firstWhere(
-            (p) => p.playerId == playerId,
-            orElse: () => Player(
-              playerId: playerId,
-              name: '',
-              available: false,
-              powered: false,
-              state: 'idle',
-            ),
-          );
-
-          _logger.log('🎵 Player ${player.name} current_item_id: ${player.currentItemId}');
-          _logger.log('🎵 Queue has ${items.length} items:');
-          for (var i = 0; i < items.length && i < 3; i++) {
-            _logger.log('  [$i] queue_item_id: ${items[i].queueItemId} - ${items[i].track.name}');
+          _logger.log('🎵 Queue has ${items.length} items, currentIndex: $currentIndex');
+          if (currentIndex != null && currentIndex >= 0 && currentIndex < items.length) {
+            _logger.log('✅ Current track: ${items[currentIndex].track.name}');
+          } else if (currentIndex != null) {
+            _logger.log('⚠️ Current index $currentIndex is out of range (0-${items.length - 1})');
+            currentIndex = null;
           }
 
-          // Find current index by matching current_item_id
-          int? currentIndex;
-          if (player.currentItemId != null) {
-            currentIndex = items.indexWhere(
-              (item) => item.queueItemId == player.currentItemId,
-            );
-            if (currentIndex == -1) {
-              _logger.log('⚠️ Current item ID "${player.currentItemId}" not found in queue');
-              currentIndex = null;
-            } else {
-              _logger.log('✓ Current track at index $currentIndex: ${items[currentIndex].track.name}');
-            }
-          } else {
-            _logger.log('⚠️ Player has no current_item_id');
-            // Workaround: If player is playing but has no current_item_id, default to first item
-            if (player.state == 'playing' && items.isNotEmpty) {
-              currentIndex = 0;
-              _logger.log('🔧 Workaround: Defaulting to first queue item for playing player');
-            }
-          }
-
-          // Check if API provides queue metadata
-          // Note: We may need to get this from a different endpoint
           return PlayerQueue(
             playerId: playerId,
             items: items,
-            currentIndex: currentIndex, // Don't default - let it be null if unknown
-            shuffleEnabled: null, // TODO: Get from queue metadata if available
-            repeatMode: null, // TODO: Get from queue metadata if available
+            currentIndex: currentIndex,
+            shuffleEnabled: shuffleEnabled,
+            repeatMode: repeatMode,
           );
         } catch (e) {
           _logger.log('Error getting queue: $e');
