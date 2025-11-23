@@ -102,9 +102,12 @@ class QueueItem {
                         json['item_id']?.toString() ??
                         '';
 
+    // The track data is nested inside 'media_item' field
+    final mediaItem = json['media_item'] as Map<String, dynamic>? ?? json;
+
     return QueueItem(
       queueItemId: queueItemId,
-      track: Track.fromJson(json),
+      track: Track.fromJson(mediaItem),
       streamdetails: json['streamdetails'] != null
           ? StreamDetails.fromJson(json['streamdetails'] as Map<String, dynamic>)
           : null,
