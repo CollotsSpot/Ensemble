@@ -1,6 +1,6 @@
-# Music Assistant Mobile
+# Amass
 
-A minimalistic Flutter mobile client for Music Assistant - stream your entire music library from your Music Assistant server to your mobile device.
+A minimalistic Flutter mobile client for [Music Assistant](https://music-assistant.io/) - stream your entire music library from your Music Assistant server to your mobile device.
 
 ## Features
 
@@ -29,12 +29,16 @@ A minimalistic Flutter mobile client for Music Assistant - stream your entire mu
 - Dart SDK
 - Android Studio / Xcode for mobile development
 
-### Installation
+### Download APK
+
+Download the latest APK from [GitHub Actions](https://github.com/CollotsSpot/Amass/actions) artifacts (look for the "amass-apk" artifact in successful builds).
+
+### Build from Source
 
 1. Clone the repository
 ```bash
-git clone <repository-url>
-cd music-assistant-mobile
+git clone https://github.com/CollotsSpot/Amass.git
+cd Amass
 ```
 
 2. Install dependencies
@@ -42,10 +46,21 @@ cd music-assistant-mobile
 flutter pub get
 ```
 
-3. Run the app
+3. Generate launcher icons
+```bash
+flutter pub run flutter_launcher_icons
+```
+
+4. Run the app
 ```bash
 flutter run
 ```
+
+Or build an APK:
+```bash
+flutter build apk --release
+```
+The APK will be available at `build/app/outputs/flutter-apk/app-release.apk`
 
 ### Setup
 
