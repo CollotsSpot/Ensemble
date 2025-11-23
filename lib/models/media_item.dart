@@ -23,9 +23,9 @@ class ProviderMapping {
 
   factory ProviderMapping.fromJson(Map<String, dynamic> json) {
     return ProviderMapping(
-      itemId: json['item_id'] as String,
-      providerDomain: json['provider_domain'] as String,
-      providerInstance: json['provider_instance'] as String,
+      itemId: json['item_id'] as String? ?? '',
+      providerDomain: json['provider_domain'] as String? ?? '',
+      providerInstance: json['provider_instance'] as String? ?? '',
       available: json['available'] as bool? ?? true,
       audioFormat: json['audio_format'] as Map<String, dynamic>?,
     );
@@ -80,9 +80,9 @@ class MediaItem {
     }
 
     return MediaItem(
-      itemId: json['item_id'] as String? ?? json['id'] as String,
+      itemId: json['item_id']?.toString() ?? json['id']?.toString() ?? '',
       provider: json['provider'] as String? ?? 'unknown',
-      name: json['name'] as String,
+      name: json['name'] as String? ?? '',
       mediaType: mediaType ?? MediaType.track,
       sortName: json['sort_name'] as String?,
       uri: json['uri'] as String?,
