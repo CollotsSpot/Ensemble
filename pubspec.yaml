@@ -14,10 +14,6 @@ dependencies:
   cupertino_icons: ^1.0.6
   google_fonts: ^6.1.0
 
-  # Audio playback
-  just_audio: ^0.9.36
-  audio_service: ^0.18.12
-
   # State management
   provider: ^6.1.1
 
@@ -28,13 +24,7 @@ dependencies:
   # Storage
   shared_preferences: ^2.2.2
 
-  # File handling
-  file_picker: ^6.1.1
-  path_provider: ^2.1.1
-  permission_handler: ^11.1.0
-
   # Utilities
-  rxdart: ^0.27.7
   uuid: ^4.2.1
 
 dev_dependencies:
