@@ -16,6 +16,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _serverUrlController = TextEditingController();
+  final _portController = TextEditingController(text: '8095');
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
@@ -32,6 +33,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final provider = context.read<MusicAssistantProvider>();
     _serverUrlController.text = provider.serverUrl ?? '';
 
+    final port = await SettingsService.getWebSocketPort();
+    if (port != null) {
+      _portController.text = port.toString();
+    }
+
     final username = await SettingsService.getUsername();
     if (username != null) {
       _usernameController.text = username;
@@ -46,6 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _serverUrlController.dispose();
+    _portController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -56,6 +63,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showError('Please enter a server URL');
       return;
     }
+
+    // Validate and save port
+    final port = _portController.text.trim();
+    if (port.isEmpty) {
+      _showError('Please enter a port number');
+      return;
+    }
+
+    final portNum = int.tryParse(port);
+    if (portNum == null || portNum < 1 || portNum > 65535) {
+      _showError('Please enter a valid port number (1-65535)');
+      return;
+    }
+
+    await SettingsService.setWebSocketPort(portNum);
 
     setState(() {
       _isConnecting = true;
@@ -249,6 +271,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 prefixIcon: const Icon(
                   Icons.dns_rounded,
+                  color: Colors.white54,
+                ),
+              ),
+              enabled: !_isConnecting,
+            ),
+
+            const SizedBox(height: 24),
+
+            // Port input
+            const Text(
+              'Port',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Music Assistant WebSocket port (usually 8095)',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            TextField(
+              controller: _portController,
+              style: const TextStyle(color: Colors.white),
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                hintText: '8095',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: Colors.white12,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: const Icon(
+                  Icons.settings_ethernet_rounded,
                   color: Colors.white54,
                 ),
               ),

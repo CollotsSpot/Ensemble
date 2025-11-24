@@ -14,6 +14,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _serverUrlController = TextEditingController();
+  final TextEditingController _portController = TextEditingController(text: '8095');
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
@@ -24,8 +25,24 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedPort();
+  }
+
+  Future<void> _loadSavedPort() async {
+    final savedPort = await SettingsService.getWebSocketPort();
+    if (savedPort != null) {
+      setState(() {
+        _portController.text = savedPort.toString();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _serverUrlController.dispose();
+    _portController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -46,6 +63,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final serverUrl = _serverUrlController.text.trim();
+      final port = _portController.text.trim();
+
+      // Validate port
+      if (port.isEmpty) {
+        setState(() {
+          _error = 'Please enter a port number';
+          _isConnecting = false;
+        });
+        return;
+      }
+
+      final portNum = int.tryParse(port);
+      if (portNum == null || portNum < 1 || portNum > 65535) {
+        setState(() {
+          _error = 'Please enter a valid port number (1-65535)';
+          _isConnecting = false;
+        });
+        return;
+      }
+
+      // Save port to settings
+      await SettingsService.setWebSocketPort(portNum);
+
       final provider = context.read<MusicAssistantProvider>();
 
       // Handle authentication if needed
@@ -165,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _serverUrlController,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: 'music.example.com',
+                  hintText: 'e.g., music.example.com or 192.168.1.100',
                   hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
                   fillColor: const Color(0xFF2a2a2a),
@@ -180,6 +220,41 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 enabled: !_isConnecting,
                 keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.next,
+              ),
+
+              const SizedBox(height: 24),
+
+              // Port
+              const Text(
+                'Port',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: _portController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: '8095',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF2a2a2a),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.settings_ethernet_rounded,
+                    color: Colors.white54,
+                  ),
+                ),
+                enabled: !_isConnecting,
+                keyboardType: TextInputType.number,
                 textInputAction: _requiresAuth ? TextInputAction.next : TextInputAction.done,
                 onSubmitted: (_) => _requiresAuth ? null : _connect(),
               ),
