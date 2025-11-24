@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/images/logo.png" alt="Amass Logo" height="120">
+  <img src="assets/images/amass-main-logo.png" alt="Amass Logo" height="120">
   <h1>Amass</h1>
   <p>A minimalistic mobile client for <a href="https://music-assistant.io/">Music Assistant</a></p>
   <p>Stream your entire music library from your Music Assistant server to your mobile device.</p>
