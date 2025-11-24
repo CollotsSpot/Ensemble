@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/music_assistant_provider.dart';
 import '../models/media_item.dart';
 import 'artist_details_screen.dart';
+import '../constants/hero_tags.dart';
 
 class LibraryArtistsScreen extends StatelessWidget {
   const LibraryArtistsScreen({super.key});
@@ -95,22 +96,31 @@ class LibraryArtistsScreen extends StatelessWidget {
 
     return Builder(
       builder: (context) => ListTile(
-        leading: CircleAvatar(
-          radius: 24,
-          backgroundColor: Colors.white12,
-          backgroundImage: imageUrl != null ? NetworkImage(imageUrl) : null,
-          child: imageUrl == null
-              ? const Icon(Icons.person_rounded, color: Colors.white54)
-              : null,
-        ),
-        title: Text(
-          artist.name,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
+        leading: Hero(
+          tag: HeroTags.artistImage + (artist.uri ?? artist.itemId),
+          child: CircleAvatar(
+            radius: 24,
+            backgroundColor: Colors.white12,
+            backgroundImage: imageUrl != null ? NetworkImage(imageUrl) : null,
+            child: imageUrl == null
+                ? const Icon(Icons.person_rounded, color: Colors.white54)
+                : null,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        ),
+        title: Hero(
+          tag: HeroTags.artistName + (artist.uri ?? artist.itemId),
+          child: Material(
+            color: Colors.transparent,
+            child: Text(
+              artist.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
         onTap: () {
           Navigator.push(

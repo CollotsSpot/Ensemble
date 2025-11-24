@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/music_assistant_provider.dart';
 import '../models/media_item.dart';
 import 'album_details_screen.dart';
+import '../constants/hero_tags.dart';
 
 class LibraryAlbumsScreen extends StatelessWidget {
   const LibraryAlbumsScreen({super.key});
@@ -113,47 +114,62 @@ class LibraryAlbumsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white12,
-                borderRadius: BorderRadius.circular(12),
-                image: imageUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(imageUrl),
-                        fit: BoxFit.cover,
+            child: Hero(
+              tag: HeroTags.albumCover + (album.uri ?? album.itemId),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white12,
+                  borderRadius: BorderRadius.circular(12),
+                  image: imageUrl != null
+                      ? DecorationImage(
+                          image: NetworkImage(imageUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: imageUrl == null
+                    ? const Center(
+                        child: Icon(
+                          Icons.album_rounded,
+                          size: 64,
+                          color: Colors.white54,
+                        ),
                       )
                     : null,
               ),
-              child: imageUrl == null
-                  ? const Center(
-                      child: Icon(
-                        Icons.album_rounded,
-                        size: 64,
-                        color: Colors.white54,
-                      ),
-                    )
-                  : null,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            album.name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+          Hero(
+            tag: HeroTags.albumTitle + (album.uri ?? album.itemId),
+            child: Material(
+              color: Colors.transparent,
+              child: Text(
+                album.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
-          Text(
-            album.artistsString,
-            style: const TextStyle(
-              color: Colors.white54,
-              fontSize: 12,
+          Hero(
+            tag: HeroTags.artistName + (album.uri ?? album.itemId),
+            child: Material(
+              color: Colors.transparent,
+              child: Text(
+                album.artistsString,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
