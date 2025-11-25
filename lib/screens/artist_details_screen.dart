@@ -90,7 +90,7 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
 
           if (validSearchAlbums.isNotEmpty) {
             print('✅ Found ${validSearchAlbums.length} albums via search fallback');
-            artistAlbums = validSearchAlbums as List<Album>;
+            artistAlbums = validSearchAlbums;
           } else {
             print('⚠️ Search returned no valid albums for this artist');
           }
@@ -113,7 +113,7 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
       }
     }
   }
-
+  
   @override
   Widget build(BuildContext context) {
     final maProvider = context.watch<MusicAssistantProvider>();
@@ -298,3 +298,4 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
       ),
     );
   }
+}
