@@ -6,6 +6,7 @@ import '../services/settings_service.dart';
 import '../services/auth_service.dart';
 import '../services/debug_logger.dart';
 import '../theme/theme_provider.dart';
+import '../utils/layout_debug.dart';
 import 'debug_log_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,141 +16,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  final _serverUrlController = TextEditingController();
-  final _portController = TextEditingController(text: '8095');
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _authService = AuthService();
-  final _logger = DebugLogger();
-  bool _isConnecting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final provider = context.read<MusicAssistantProvider>();
-    _serverUrlController.text = provider.serverUrl ?? '';
-
-    final port = await SettingsService.getWebSocketPort();
-    if (port != null) {
-      _portController.text = port.toString();
-    }
-
-    final username = await SettingsService.getUsername();
-    if (username != null) {
-      _usernameController.text = username;
-    }
-
-    final password = await SettingsService.getPassword();
-    if (password != null) {
-      _passwordController.text = password;
-    }
-  }
-
-  @override
-  void dispose() {
-    _serverUrlController.dispose();
-    _portController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _connect() async {
-    if (_serverUrlController.text.isEmpty) {
-      _showError('Please enter a server URL');
-      return;
-    }
-
-    // Validate and save port
-    final port = _portController.text.trim();
-    if (port.isEmpty) {
-      _showError('Please enter a port number');
-      return;
-    }
-
-    final portNum = int.tryParse(port);
-    if (portNum == null || portNum < 1 || portNum > 65535) {
-      _showError('Please enter a valid port number (1-65535)');
-      return;
-    }
-
-    await SettingsService.setWebSocketPort(portNum);
-
-    setState(() {
-      _isConnecting = true;
-    });
-
-    try {
-      // Attempt authentication if username/password provided
-      if (_usernameController.text.trim().isNotEmpty &&
-          _passwordController.text.trim().isNotEmpty) {
-        _logger.log('🔐 Attempting login with credentials...');
-
-        final token = await _authService.login(
-          _serverUrlController.text,
-          _usernameController.text.trim(),
-          _passwordController.text.trim(),
-        );
-
-        if (token != null) {
-          // Save credentials for future use
-          await SettingsService.setUsername(_usernameController.text.trim());
-          await SettingsService.setPassword(_passwordController.text.trim());
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✓ Authentication successful!'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        } else {
-          _showError('Authentication failed. Please check your credentials.');
-          setState(() {
-            _isConnecting = false;
-          });
-          return;
-        }
-      }
-
-      // Connect to Music Assistant
-      final provider = context.read<MusicAssistantProvider>();
-      await provider.connectToServer(_serverUrlController.text);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Connected successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      _showError('Connection failed: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isConnecting = false;
-        });
-      }
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
+// ... (rest of state class until build) ...
 
   @override
   Widget build(BuildContext context) {
@@ -158,395 +25,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-          color: colorScheme.onBackground,
-        ),
-        title: Text(
-          'Settings',
-          style: textTheme.titleLarge?.copyWith(
-            color: colorScheme.onBackground,
-            fontWeight: FontWeight.w300,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const DebugLogScreen(),
-                ),
-              );
-            },
-            color: colorScheme.onBackground,
-            tooltip: 'Debug Logs',
-          ),
-        ],
-      ),
+      // ... (existing scaffold params) ...
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Connection status
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceVariant.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _getStatusIcon(provider.connectionState),
-                    color: _getStatusColor(provider.connectionState, colorScheme),
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Connection Status',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _getStatusText(provider.connectionState),
-                          style: textTheme.titleMedium?.copyWith(
-                            color: _getStatusColor(provider.connectionState, colorScheme),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Server URL input
-            Text(
-              'Music Assistant Server',
-              style: textTheme.titleMedium?.copyWith(
-                color: colorScheme.onBackground,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Enter your Music Assistant server URL or IP address',
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onBackground.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _serverUrlController,
-              style: TextStyle(color: colorScheme.onSurface),
-              decoration: InputDecoration(
-                hintText: 'e.g., music.example.com or 192.168.1.100',
-                hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
-                filled: true,
-                fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: Icon(
-                  Icons.dns_rounded,
-                  color: colorScheme.onSurface.withOpacity(0.54),
-                ),
-              ),
-              enabled: !_isConnecting,
-            ),
-
-            const SizedBox(height: 24),
-
-            // Port input
-            Text(
-              'Port',
-              style: textTheme.titleMedium?.copyWith(
-                color: colorScheme.onBackground,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Music Assistant WebSocket port (usually 8095)',
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onBackground.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _portController,
-              style: TextStyle(color: colorScheme.onSurface),
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                hintText: '8095',
-                hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
-                filled: true,
-                fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: Icon(
-                  Icons.settings_ethernet_rounded,
-                  color: colorScheme.onSurface.withOpacity(0.54),
-                ),
-              ),
-              enabled: !_isConnecting,
-            ),
-
-            const SizedBox(height: 32),
-
-            // Connect button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isConnecting ? null : _connect,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  disabledBackgroundColor: colorScheme.primary.withOpacity(0.38),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _isConnecting
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colorScheme.onPrimary,
-                        ),
-                      )
-                    : const Text(
-                        'Connect',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ),
-
-            if (provider.isConnected) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton(
-                  onPressed: () async {
-                    await provider.disconnect();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Disconnected from server'),
-                        ),
-                      );
-                    }
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colorScheme.error,
-                    side: BorderSide(color: colorScheme.error.withOpacity(0.5)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Disconnect',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 32),
-
-            // Theme section
-            Text(
-              'Theme',
-              style: textTheme.titleMedium?.copyWith(
-                color: colorScheme.onBackground,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Theme mode selector
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceVariant.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Theme Mode',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Consumer<ThemeProvider>(
-                    builder: (context, themeProvider, _) {
-                      return SegmentedButton<ThemeMode>(
-                        segments: const [
-                          ButtonSegment<ThemeMode>(
-                            value: ThemeMode.light,
-                            label: Text('Light'),
-                            icon: Icon(Icons.light_mode_rounded),
-                          ),
-                          ButtonSegment<ThemeMode>(
-                            value: ThemeMode.dark,
-                            label: Text('Dark'),
-                            icon: Icon(Icons.dark_mode_rounded),
-                          ),
-                          ButtonSegment<ThemeMode>(
-                            value: ThemeMode.system,
-                            label: Text('System'),
-                            icon: Icon(Icons.auto_mode_rounded),
-                          ),
-                        ],
-                        selected: {themeProvider.themeMode},
-                        onSelectionChanged: (Set<ThemeMode> newSelection) {
-                          themeProvider.setThemeMode(newSelection.first);
-                        },
-                        style: ButtonStyle(
-                          backgroundColor: MaterialStateProperty.resolveWith((states) {
-                            if (states.contains(MaterialState.selected)) {
-                              return colorScheme.primaryContainer;
-                            }
-                            return Colors.transparent;
-                          }),
-                          foregroundColor: MaterialStateProperty.resolveWith((states) {
-                            if (states.contains(MaterialState.selected)) {
-                              return colorScheme.onPrimaryContainer;
-                            }
-                            return colorScheme.onSurfaceVariant;
-                          }),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Material You toggle
-            Consumer<ThemeProvider>(
-              builder: (context, themeProvider, _) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceVariant.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SwitchListTile(
-                    title: Text(
-                      'Material You',
-                      style: TextStyle(color: colorScheme.onSurface),
-                    ),
-                    subtitle: Text(
-                      'Use system colors (Android 12+)',
-                      style: TextStyle(color: colorScheme.onSurface.withOpacity(0.6), fontSize: 12),
-                    ),
-                    value: themeProvider.useMaterialTheme,
-                    onChanged: (value) {
-                      themeProvider.setUseMaterialTheme(value);
-                    },
-                    activeColor: colorScheme.primary,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: 16),
-
-            // Adaptive theme toggle
-            Consumer<ThemeProvider>(
-              builder: (context, themeProvider, _) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceVariant.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SwitchListTile(
-                    title: Text(
-                      'Adaptive Theme',
-                      style: TextStyle(color: colorScheme.onSurface),
-                    ),
-                    subtitle: Text(
-                      'Extract colors from album and artist artwork',
-                      style: TextStyle(color: colorScheme.onSurface.withOpacity(0.6), fontSize: 12),
-                    ),
-                    value: themeProvider.adaptiveTheme,
-                    onChanged: (value) {
-                      themeProvider.setAdaptiveTheme(value);
-                    },
-                    activeColor: colorScheme.primary,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: 32),
-
-            // Debug logs button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const DebugLogScreen(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.bug_report_rounded),
-                label: const Text('View Debug Logs'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colorScheme.onBackground,
-                  side: BorderSide(color: colorScheme.outline),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-
+            // ... (existing settings widgets: connection, server url, port, connect button, theme section, debug logs button) ...
+            
+            // (I will match the surrounding context in the replace call to insert at the end)
+            
+            // ...
+            
             const SizedBox(height: 32),
 
             // Info section
@@ -594,9 +84,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+
+            const SizedBox(height: 32),
+
+            // Layout Debugger
+            ListenableBuilder(
+              listenable: LayoutDebug(),
+              builder: (context, _) {
+                final debug = LayoutDebug();
+                return ExpansionTile(
+                  title: Text(
+                    'Layout Debugger',
+                    style: TextStyle(color: colorScheme.onSurface),
+                  ),
+                  collapsedIconColor: colorScheme.onSurface,
+                  iconColor: colorScheme.primary,
+                  children: [
+                    _buildSlider(
+                      'Left Padding',
+                      debug.logoPaddingLeft,
+                      0, 100,
+                      (v) => debug.update(left: v),
+                      colorScheme,
+                    ),
+                    _buildSlider(
+                      'Top Padding',
+                      debug.logoPaddingTop,
+                      0, 100,
+                      (v) => debug.update(top: v),
+                      colorScheme,
+                    ),
+                    _buildSlider(
+                      'Bottom Padding',
+                      debug.logoPaddingBottom,
+                      0, 100,
+                      (v) => debug.update(bottom: v),
+                      colorScheme,
+                    ),
+                    _buildSlider(
+                      'Logo Size',
+                      debug.logoSize,
+                      10, 200,
+                      (v) => debug.update(size: v),
+                      colorScheme,
+                    ),
+                  ],
+                );
+              },\n            ),
+            const SizedBox(height: 100), // Extra space at bottom
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSlider(String label, double value, double min, double max, ValueChanged<double> onChanged, ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            '$label: ${value.toStringAsFixed(1)}',
+            style: TextStyle(color: colorScheme.onSurface),
+          ),
+        ),
+        Slider(
+          value: value,
+          min: min,
+          max: max,
+          onChanged: onChanged,
+          activeColor: colorScheme.primary,
+          inactiveColor: colorScheme.surfaceVariant,
+        ),
+      ],
     );
   }
 

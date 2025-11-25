@@ -5,6 +5,7 @@ import '../widgets/player_selector.dart';
 import '../widgets/album_row.dart';
 import '../widgets/artist_row.dart';
 import '../widgets/logo_text.dart';
+import '../utils/layout_debug.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 
@@ -20,15 +21,25 @@ class NewHomeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Padding(
-          padding: const EdgeInsets.only(left: 8.0, top: 8.0, bottom: 8.0),
-          child: Image.asset(
-            'assets/images/attm_logo.png',
-            height: 32,
-            fit: BoxFit.contain,
-            alignment: Alignment.centerLeft,
-            color: colorScheme.onBackground, // Tints the logo to match theme text color
-          ),
+        title: ListenableBuilder(
+          listenable: LayoutDebug(),
+          builder: (context, _) {
+            final debug = LayoutDebug();
+            return Padding(
+              padding: EdgeInsets.only(
+                left: debug.logoPaddingLeft,
+                top: debug.logoPaddingTop,
+                bottom: debug.logoPaddingBottom,
+              ),
+              child: Image.asset(
+                'assets/images/attm_logo.png',
+                height: debug.logoSize,
+                fit: BoxFit.contain,
+                alignment: Alignment.centerLeft,
+                color: colorScheme.onBackground,
+              ),
+            );
+          },
         ),
         titleSpacing: 0,
         centerTitle: false,
