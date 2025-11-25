@@ -9,7 +9,9 @@ final ColorScheme brandLightColorScheme = ColorScheme.fromSeed(
   seedColor: brandAccentColor,
   brightness: Brightness.light,
   background: const Color(0xFFFAFAFA),
+  onBackground: const Color(0xFF1a1a1a), // Ensure dark text
   surface: const Color(0xFFFFFFFF),
+  onSurface: const Color(0xFF1a1a1a), // Ensure dark text
 );
 
 final ColorScheme brandDarkColorScheme = ColorScheme.fromSeed(
