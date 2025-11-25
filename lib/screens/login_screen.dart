@@ -51,6 +51,101 @@ class _LoginScreenState extends State<LoginScreen> {
   
   // ... existing code ...
 
+  Future<void> _connect() async {
+    if (_serverUrlController.text.trim().isEmpty) {
+      setState(() {
+        _error = 'Please enter your Music Assistant server address';
+      });
+      return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _error = null;
+    });
+
+    try {
+      final serverUrl = _normalizeServerUrl(_serverUrlController.text.trim());
+      final port = _portController.text.trim();
+
+      // Validate port
+      if (port.isEmpty) {
+        setState(() {
+          _error = 'Please enter a port number';
+          _isConnecting = false;
+        });
+        return;
+      }
+
+      final portNum = int.tryParse(port);
+      if (portNum == null || portNum < 1 || portNum > 65535) {
+        setState(() {
+          _error = 'Please enter a valid port number (1-65535)';
+          _isConnecting = false;
+        });
+        return;
+      }
+
+      // Save port to settings
+      await SettingsService.setWebSocketPort(portNum);
+
+      final provider = context.read<MusicAssistantProvider>();
+
+      // Handle authentication if needed
+      if (_requiresAuth) {
+        final username = _usernameController.text.trim();
+        final password = _passwordController.text.trim();
+
+        if (username.isEmpty || password.isEmpty) {
+          setState(() {
+            _error = 'Please enter username and password';
+            _isConnecting = false;
+          });
+          return;
+        }
+
+        // Attempt login
+        final token = await _authService.login(serverUrl, username, password);
+        if (token == null) {
+          setState(() {
+            _error = 'Authentication failed. Please check your credentials.';
+            _isConnecting = false;
+          });
+          return;
+        }
+
+        // Save credentials
+        await SettingsService.setUsername(username);
+        await SettingsService.setPassword(password);
+      }
+
+      // Connect to server
+      await provider.connectToServer(serverUrl);
+
+      // Wait a moment for connection to establish
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (provider.isConnected) {
+        // Navigate to home screen
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      } else {
+        setState(() {
+          _error = 'Could not connect to server. Please check the address and try again.';
+          _isConnecting = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Connection failed: ${e.toString()}';
+        _isConnecting = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;

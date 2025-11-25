@@ -82,11 +82,13 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
           final searchAlbums = searchResults['albums'] ?? [];
           
           // Filter search results to ensure they are actually for this artist
-          final validSearchAlbums = searchAlbums.where((album) {
-             return album.artists?.any((a) => 
+          final validSearchAlbums = searchAlbums.where((item) {
+             // Ensure item is an Album and check artist match
+             if (item is! Album) return false;
+             return item.artists?.any((a) => 
                a.name.toLowerCase() == widget.artist.name.toLowerCase()
              ) ?? false;
-          }).toList();
+          }).cast<Album>().toList();
 
           if (validSearchAlbums.isNotEmpty) {
             print('✅ Found ${validSearchAlbums.length} albums via search fallback');
