@@ -154,9 +154,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MusicAssistantProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1a1a1a),
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -329,20 +330,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: ElevatedButton(
                 onPressed: _isConnecting ? null : _connect,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF1a1a1a),
-                  disabledBackgroundColor: Colors.white38,
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  disabledBackgroundColor: colorScheme.primary.withOpacity(0.38),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: _isConnecting
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Color(0xFF1a1a1a),
+                          color: colorScheme.onPrimary,
                         ),
                       )
                     : const Text(
@@ -453,9 +454,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           }),
                           foregroundColor: MaterialStateProperty.resolveWith((states) {
                             if (states.contains(MaterialState.selected)) {
-                              return const Color(0xFF1a1a1a);
+                              return colorScheme.onPrimary;
                             }
-                            return Colors.white70;
+                            return colorScheme.onSurface.withOpacity(0.7);
                           }),
                         ),
                       );
