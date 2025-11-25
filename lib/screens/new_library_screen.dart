@@ -15,17 +15,18 @@ class NewLibraryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MusicAssistantProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1a1a1a),
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Library',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
+          style: textTheme.titleLarge?.copyWith(
+            color: colorScheme.onBackground,
             fontWeight: FontWeight.w300,
           ),
         ),
@@ -41,6 +42,7 @@ class NewLibraryScreen extends StatelessWidget {
                 ),
               );
             },
+            color: colorScheme.onBackground,
           ),
           const PlayerSelector(),
         ],
@@ -53,22 +55,24 @@ class NewLibraryScreen extends StatelessWidget {
 
   Widget _buildDisconnectedView(
       BuildContext context, MusicAssistantProvider provider) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.cloud_off_rounded,
               size: 64,
-              color: Colors.white54,
+              color: colorScheme.onSurface.withOpacity(0.54),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Not connected to Music Assistant',
               style: TextStyle(
-                color: Colors.white70,
+                color: colorScheme.onSurface.withOpacity(0.7),
                 fontSize: 16,
               ),
               textAlign: TextAlign.center,
@@ -86,8 +90,8 @@ class NewLibraryScreen extends StatelessWidget {
               icon: const Icon(Icons.settings_rounded),
               label: const Text('Configure Server'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF1a1a1a),
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 12,
@@ -189,8 +193,11 @@ class NewLibraryScreen extends StatelessWidget {
     required String subtitle,
     required VoidCallback? onTap,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
-      color: const Color(0xFF2a2a2a),
+      color: colorScheme.surfaceVariant.withOpacity(0.3),
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -200,34 +207,32 @@ class NewLibraryScreen extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: colorScheme.surfaceVariant,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             icon,
-            color: Colors.white,
+            color: colorScheme.onSurfaceVariant,
             size: 24,
           ),
         ),
         title: Text(
           title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
+          style: textTheme.titleMedium?.copyWith(
+            color: colorScheme.onSurface,
             fontWeight: FontWeight.w500,
           ),
         ),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 13,
+          style: textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurface.withOpacity(0.7),
           ),
         ),
         trailing: onTap != null
-            ? const Icon(
+            ? Icon(
                 Icons.chevron_right_rounded,
-                color: Colors.white54,
+                color: colorScheme.onSurface.withOpacity(0.5),
               )
             : null,
         onTap: onTap,

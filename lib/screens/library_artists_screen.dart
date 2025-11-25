@@ -11,35 +11,38 @@ class LibraryArtistsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MusicAssistantProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1a1a1a),
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
-          color: Colors.white,
+          color: colorScheme.onBackground,
         ),
-        title: const Text(
+        title: Text(
           'Artists',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
+          style: textTheme.headlineSmall?.copyWith(
+            color: colorScheme.onBackground,
             fontWeight: FontWeight.w300,
           ),
         ),
         centerTitle: true,
       ),
-      body: _buildArtistsList(provider),
+      body: _buildArtistsList(context, provider),
     );
   }
 
-  Widget _buildArtistsList(MusicAssistantProvider provider) {
+  Widget _buildArtistsList(BuildContext context, MusicAssistantProvider provider) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (provider.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
+      return Center(
+        child: CircularProgressIndicator(color: colorScheme.primary),
       );
     }
 
@@ -48,16 +51,16 @@ class LibraryArtistsScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.person_outline_rounded,
               size: 64,
-              color: Colors.white54,
+              color: colorScheme.onSurface.withOpacity(0.54),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No artists found',
               style: TextStyle(
-                color: Colors.white70,
+                color: colorScheme.onSurface.withOpacity(0.7),
                 fontSize: 16,
               ),
             ),
@@ -67,8 +70,8 @@ class LibraryArtistsScreen extends StatelessWidget {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Refresh'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF1a1a1a),
+                backgroundColor: colorScheme.surfaceVariant,
+                foregroundColor: colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -77,6 +80,8 @@ class LibraryArtistsScreen extends StatelessWidget {
     }
 
     return RefreshIndicator(
+      color: colorScheme.primary,
+      backgroundColor: colorScheme.surface,
       onRefresh: () async {
         await provider.loadLibrary();
       },
@@ -85,14 +90,16 @@ class LibraryArtistsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         itemBuilder: (context, index) {
           final artist = provider.artists[index];
-          return _buildArtistTile(artist, provider);
+          return _buildArtistTile(context, artist, provider);
         },
       ),
     );
   }
 
-  Widget _buildArtistTile(Artist artist, MusicAssistantProvider provider) {
+  Widget _buildArtistTile(BuildContext context, Artist artist, MusicAssistantProvider provider) {
     final imageUrl = provider.getImageUrl(artist, size: 128);
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Builder(
       builder: (context) => ListTile(
@@ -100,10 +107,10 @@ class LibraryArtistsScreen extends StatelessWidget {
           tag: HeroTags.artistImage + (artist.uri ?? artist.itemId),
           child: CircleAvatar(
             radius: 24,
-            backgroundColor: Colors.white12,
+            backgroundColor: colorScheme.surfaceVariant,
             backgroundImage: imageUrl != null ? NetworkImage(imageUrl) : null,
             child: imageUrl == null
-                ? const Icon(Icons.person_rounded, color: Colors.white54)
+                ? Icon(Icons.person_rounded, color: colorScheme.onSurfaceVariant)
                 : null,
           ),
         ),
@@ -113,8 +120,8 @@ class LibraryArtistsScreen extends StatelessWidget {
             color: Colors.transparent,
             child: Text(
               artist.name,
-              style: const TextStyle(
-                color: Colors.white,
+              style: textTheme.titleMedium?.copyWith(
+                color: colorScheme.onSurface,
                 fontWeight: FontWeight.w500,
               ),
               maxLines: 1,
