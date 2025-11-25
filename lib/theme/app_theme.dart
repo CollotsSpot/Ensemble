@@ -69,6 +69,6 @@ class AppTheme {
     return scheme.copyWith(
       surface: brightness == Brightness.light ? Colors.white : Colors.black,
       background: brightness == Brightness.light ? Colors.white : Colors.black,
-    ).harmonized();
+    );
   }
 }

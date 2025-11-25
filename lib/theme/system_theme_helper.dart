@@ -21,12 +21,12 @@ class SystemThemeHelper {
           lightScheme = lightScheme.copyWith(
             surface: Colors.white,
             background: Colors.white,
-          ).harmonized();
+          );
 
           darkScheme = darkScheme.copyWith(
             surface: Colors.black,
             background: Colors.black,
-          ).harmonized();
+          );
         }
 
         return (lightScheme, darkScheme);
@@ -51,12 +51,12 @@ class SystemThemeHelper {
             lightScheme = lightScheme.copyWith(
               surface: Colors.white,
               background: Colors.white,
-            ).harmonized();
+            );
 
             darkScheme = darkScheme.copyWith(
               surface: Colors.black,
               background: Colors.black,
-            ).harmonized();
+            );
           }
 
           return (lightScheme, darkScheme);
