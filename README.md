@@ -1,6 +1,8 @@
 <div align="center">
   <img src="assets/images/attm_logo.png" alt="Assistant To The Music Logo" height="120">
+
 ---
+
   <p>A minimalistic mobile client for <a href="https://music-assistant.io/">Music Assistant</a></p>
   <p>Control your Music Assistant server and manage your entire music library from your mobile device.</p>
 </div>
