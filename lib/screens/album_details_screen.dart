@@ -259,9 +259,17 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
                   },
                 ),
               ),
-            const SizedBox(height: 32),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
           ],
         ),
+          // Floating mini player at bottom of screen
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: const MiniPlayer(),
+          ),
+        ],
       ),
     );
   }
@@ -726,9 +734,17 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
                   },
                 ),
               ),
-            const SizedBox(height: 32),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
           ],
         ),
+          // Floating mini player at bottom of screen
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: const MiniPlayer(),
+          ),
+        ],
       ),
     );
   }
@@ -787,9 +803,17 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
                   },
                 ),
               ),
-            const SizedBox(height: 32),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
           ],
         ),
+          // Floating mini player at bottom of screen
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: const MiniPlayer(),
+          ),
+        ],
       ),
     );
   }
@@ -844,9 +868,9 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
                   },
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
-            ],
-          ),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
+          ],
+        ),
           // Floating mini player at bottom of screen
           Positioned(
             left: 0,
