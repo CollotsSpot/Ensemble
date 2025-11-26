@@ -408,7 +408,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
                     'Theme Mode',
@@ -454,6 +454,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             }
                             return colorScheme.onSurfaceVariant;
                           }),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
                         ),
                       );
                     },

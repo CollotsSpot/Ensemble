@@ -216,26 +216,13 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _artistDescription!,
-                              style: textTheme.bodyLarge?.copyWith(
-                                color: colorScheme.onBackground.withOpacity(0.8),
-                              ),
-                              maxLines: _isDescriptionExpanded ? null : 2,
-                              overflow: _isDescriptionExpanded ? null : TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _isDescriptionExpanded ? 'Show less' : 'Show more',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          _artistDescription!,
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.onBackground.withOpacity(0.8),
+                          ),
+                          maxLines: _isDescriptionExpanded ? null : 2,
+                          overflow: _isDescriptionExpanded ? null : TextOverflow.ellipsis,
                         ),
                       ),
                     ),
