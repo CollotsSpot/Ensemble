@@ -21,6 +21,7 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
   bool _isLoading = true;
   ColorScheme? _lightColorScheme;
   ColorScheme? _darkColorScheme;
+  bool _isDescriptionExpanded = false;
 
   @override
   void initState() {
@@ -49,6 +50,21 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
     } catch (e) {
       print('⚠️ Failed to extract colors for artist: $e');
     }
+  }
+
+  String? _getArtistDescription() {
+    // Try to get description/biography from metadata
+    final metadata = widget.artist.metadata;
+    if (metadata == null) return null;
+
+    // Check various possible keys for description/biography
+    final description = metadata['description'] ??
+                       metadata['biography'] ??
+                       metadata['wiki'] ??
+                       metadata['bio'] ??
+                       metadata['summary'];
+
+    return description as String?;
   }
 
   Future<void> _loadArtistAlbums() async {
@@ -193,7 +209,43 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+                  // Artist Description/Biography
+                  if (_getArtistDescription() != null) ...[
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _isDescriptionExpanded = !_isDescriptionExpanded;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _getArtistDescription()!,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onBackground.withOpacity(0.8),
+                              ),
+                              maxLines: _isDescriptionExpanded ? null : 3,
+                              overflow: _isDescriptionExpanded ? null : TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _isDescriptionExpanded ? 'Show less' : 'Show more',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Text(
                     'Albums',
                     style: textTheme.titleLarge?.copyWith(

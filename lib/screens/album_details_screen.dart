@@ -5,6 +5,7 @@ import '../providers/music_assistant_provider.dart';
 import '../constants/hero_tags.dart';
 import '../theme/palette_helper.dart';
 import '../theme/theme_provider.dart';
+import 'artist_details_screen.dart';
 
 class AlbumDetailsScreen extends StatefulWidget {
   final Album album;
@@ -22,6 +23,7 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
   ColorScheme? _lightColorScheme;
   ColorScheme? _darkColorScheme;
   int? _expandedTrackIndex;
+  bool _isDescriptionExpanded = false;
 
   @override
   void initState() {
@@ -253,6 +255,32 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
     );
   }
 
+  void _navigateToArtist() {
+    // Navigate to the first artist if available
+    if (widget.album.artists != null && widget.album.artists!.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ArtistDetailsScreen(artist: widget.album.artists!.first),
+        ),
+      );
+    }
+  }
+
+  String? _getAlbumDescription() {
+    // Try to get description from metadata
+    final metadata = widget.album.metadata;
+    if (metadata == null) return null;
+
+    // Check various possible keys for description
+    final description = metadata['description'] ??
+                       metadata['wiki'] ??
+                       metadata['biography'] ??
+                       metadata['summary'];
+
+    return description as String?;
+  }
+
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -361,15 +389,58 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
                     tag: HeroTags.artistName + (widget.album.uri ?? widget.album.itemId),
                     child: Material(
                       color: Colors.transparent,
-                      child: Text(
-                        widget.album.artistsString,
-                        style: textTheme.titleMedium?.copyWith(
-                          color: colorScheme.onBackground.withOpacity(0.7),
+                      child: InkWell(
+                        onTap: () => _navigateToArtist(),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: Text(
+                            widget.album.artistsString,
+                            style: textTheme.titleMedium?.copyWith(
+                              color: colorScheme.onBackground.withOpacity(0.7),
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+                  // Album Description
+                  if (_getAlbumDescription() != null) ...[
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _isDescriptionExpanded = !_isDescriptionExpanded;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _getAlbumDescription()!,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onBackground.withOpacity(0.8),
+                              ),
+                              maxLines: _isDescriptionExpanded ? null : 3,
+                              overflow: _isDescriptionExpanded ? null : TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _isDescriptionExpanded ? 'Show less' : 'Show more',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Row(
                     children: [
                       // Main Play Button
