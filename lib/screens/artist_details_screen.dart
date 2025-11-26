@@ -161,7 +161,7 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
       body: Stack(
         children: [
           CustomScrollView(
-        slivers: [
+            slivers: [
           SliverAppBar(
             expandedHeight: 300,
             pinned: true,
@@ -329,8 +329,6 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
             ],
-          ],
-        ],
           ),
           // Floating mini player at bottom of screen
           Positioned(

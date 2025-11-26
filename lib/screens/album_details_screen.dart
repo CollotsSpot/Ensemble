@@ -333,7 +333,7 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
       body: Stack(
         children: [
           CustomScrollView(
-        slivers: [
+            slivers: [
           SliverAppBar(
             expandedHeight: 350, // Increased height for bigger art
             pinned: true,
@@ -844,9 +844,8 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
                   },
                 ),
               ),
-            const SizedBox(height: 80), // Extra space for floating mini player
-          ],
-        ),
+              const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
+            ],
           ),
           // Floating mini player at bottom of screen
           Positioned(
