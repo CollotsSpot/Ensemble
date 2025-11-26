@@ -44,21 +44,15 @@ class ArtistCard extends StatelessWidget {
                 : null,
           ),
           const SizedBox(height: 12),
-          // Artist name with Hero animation
-          Hero(
-            tag: HeroTags.artistName + (artist.uri ?? artist.itemId),
-            child: Material(
-              color: Colors.transparent,
-              child: Text(
-                artist.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: textTheme.titleSmall?.copyWith(
-                  color: colorScheme.onSurface,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+          // Artist name
+          Text(
+            artist.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: textTheme.titleSmall?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],

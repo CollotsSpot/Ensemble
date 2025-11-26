@@ -111,20 +111,14 @@ class LibraryArtistsScreen extends StatelessWidget {
               ? Icon(Icons.person_rounded, color: colorScheme.onSurfaceVariant)
               : null,
         ),
-        title: Hero(
-          tag: HeroTags.artistName + (artist.uri ?? artist.itemId),
-          child: Material(
-            color: Colors.transparent,
-            child: Text(
-              artist.name,
-              style: textTheme.titleMedium?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+        title: Text(
+          artist.name,
+          style: textTheme.titleMedium?.copyWith(
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w500,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         onTap: () {
           Navigator.push(

@@ -34,63 +34,48 @@ class AlbumCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Album artwork with Hero animation
+          // Album artwork
           Expanded(
-            child: Hero(
-              tag: HeroTags.albumCover + (album.uri ?? album.itemId),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12.0),
-                  color: colorScheme.surfaceVariant,
-                  image: imageUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(imageUrl),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: imageUrl == null
-                    ? Center(
-                        child: Icon(
-                          Icons.album_rounded,
-                          size: 64,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12.0),
+                color: colorScheme.surfaceVariant,
+                image: imageUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(imageUrl),
+                        fit: BoxFit.cover,
                       )
                     : null,
               ),
+              child: imageUrl == null
+                  ? Center(
+                      child: Icon(
+                        Icons.album_rounded,
+                        size: 64,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : null,
             ),
           ),
           const SizedBox(height: 8),
-          // Album title with Hero animation
-          Hero(
-            tag: HeroTags.albumTitle + (album.uri ?? album.itemId),
-            child: Material(
-              color: Colors.transparent,
-              child: Text(
-                album.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.titleSmall?.copyWith(
-                  color: colorScheme.onSurface,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+          // Album title
+          Text(
+            album.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.titleSmall?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          // Artist name with Hero animation
-          Hero(
-            tag: HeroTags.artistName + (album.uri ?? album.itemId),
-            child: Material(
-              color: Colors.transparent,
-              child: Text(
-                album.artistsString,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurface.withOpacity(0.7),
-                ),
-              ),
+          // Artist name
+          Text(
+            album.artistsString,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withOpacity(0.7),
             ),
           ),
         ],
