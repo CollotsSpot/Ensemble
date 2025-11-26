@@ -6,6 +6,7 @@ import '../screens/queue_screen.dart';
 import 'volume_control.dart';
 import '../constants/hero_tags.dart';
 import 'animated_icon_button.dart';
+import 'player_selector.dart';
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
@@ -133,19 +134,10 @@ class MiniPlayer extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            // Queue button
-                            IconButton(
-                              icon: const Icon(Icons.queue_music),
-                              color: colorScheme.onSurface.withOpacity(0.7),
-                              iconSize: 22,
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const QueueScreen(),
-                                  ),
-                                );
-                              },
+                            // Player Selector (replacing Queue button)
+                            Transform.scale(
+                              scale: 0.9,
+                              child: const PlayerSelector(),
                             ),
                             // Volume control (compact mute button)
                             const VolumeControl(compact: true),
