@@ -162,16 +162,16 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
         children: [
           CustomScrollView(
             slivers: [
-            SliverAppBar(
-              expandedHeight: 300,
-              pinned: true,
-              backgroundColor: colorScheme.background,
-              leading: IconButton(
+          SliverAppBar(
+            expandedHeight: 300,
+            pinned: true,
+            backgroundColor: colorScheme.background,
+            leading: IconButton(
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => Navigator.pop(context),
               color: colorScheme.onBackground,
-              ),
-              flexibleSpace: FlexibleSpaceBar(
+            ),
+            flexibleSpace: FlexibleSpaceBar(
               background: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -329,7 +329,9 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for floating mini player
             ],
-          ),
+          ],
+        ],
+      ),
           // Floating mini player at bottom of screen
           Positioned(
             left: 0,
