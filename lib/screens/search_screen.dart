@@ -37,6 +37,12 @@ class SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  void removeFocus() {
+    if (mounted) {
+      _focusNode.unfocus();
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();

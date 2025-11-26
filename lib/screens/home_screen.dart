@@ -24,7 +24,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return PopScope(
       canPop: _selectedIndex == 0,
       onPopInvoked: (didPop) {
-        if (didPop) return;
+        if (didPop) {
+          // When returning from a pushed screen, unfocus search if not on search tab
+          if (_selectedIndex != 2) {
+            _searchScreenKey.currentState?.removeFocus();
+          }
+          return;
+        }
+
+        // Unfocus search when using back button to go to home
+        if (_selectedIndex == 2) {
+          _searchScreenKey.currentState?.removeFocus();
+        }
+
         setState(() {
           _selectedIndex = 0;
         });
@@ -61,6 +73,11 @@ class _HomeScreenState extends State<HomeScreen> {
               child: BottomNavigationBar(
                 currentIndex: _selectedIndex,
                 onTap: (index) {
+                  // Unfocus search field when leaving search tab
+                  if (_selectedIndex == 2 && index != 2) {
+                    _searchScreenKey.currentState?.removeFocus();
+                  }
+
                   setState(() {
                     _selectedIndex = index;
                   });
