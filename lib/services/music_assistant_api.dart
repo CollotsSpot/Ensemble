@@ -1008,6 +1008,7 @@ class MusicAssistantAPI {
 
   // Player control commands
   Future<void> setPower(String playerId, bool powered) async {
+    _logger.log('🔋 API setPower: playerId=$playerId, powered=$powered');
     await _sendCommand(
       'players/cmd/power',
       args: {
@@ -1015,6 +1016,7 @@ class MusicAssistantAPI {
         'powered': powered,
       },
     );
+    _logger.log('🔋 API setPower command completed');
   }
 
   Future<void> pausePlayer(String playerId) async {

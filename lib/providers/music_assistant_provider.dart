@@ -218,8 +218,9 @@ class MusicAssistantProvider with ChangeNotifier {
 
   Future<void> _handleLocalPlayerEvent(Map<String, dynamic> event) async {
     if (!_isLocalPlaybackEnabled) return;
-    
-    
+
+    _logger.log('📥 Local player event received: ${event['command']}');
+
     try {
       final command = event['command'] as String?;
       
@@ -258,14 +259,19 @@ class MusicAssistantProvider with ChangeNotifier {
           break;
 
         case 'power':
+          _logger.log('🔋 POWER COMMAND RECEIVED!');
           final powered = event['powered'] as bool?;
+          _logger.log('🔋 Power value from event: $powered');
           if (powered != null) {
             _isLocalPlayerPowered = powered;
-            _logger.log('Local player power set to: $powered');
+            _logger.log('🔋 Local player power set to: $powered');
             if (!powered) {
               // When powered off, stop playback
+              _logger.log('🔋 Stopping playback because powered off');
               await _localPlayer.stop();
             }
+          } else {
+            _logger.log('🔋 WARNING: power value is null in event');
           }
           break;
       }
@@ -523,6 +529,8 @@ class MusicAssistantProvider with ChangeNotifier {
 
   Future<void> togglePower(String playerId) async {
     try {
+      _logger.log('🔋 togglePower called for playerId: $playerId');
+
       // Find the player to get current power state
       final player = _availablePlayers.firstWhere(
         (p) => p.playerId == playerId,
@@ -530,13 +538,18 @@ class MusicAssistantProvider with ChangeNotifier {
             ? _selectedPlayer!
             : throw Exception("Player not found"),
       );
-      
+
+      _logger.log('🔋 Current power state: ${player.powered}, will set to: ${!player.powered}');
+
       // Toggle the state
       await _api?.setPower(playerId, !player.powered);
-      
+
+      _logger.log('🔋 setPower command sent successfully');
+
       // Immediately refresh players to update UI
       await refreshPlayers();
     } catch (e) {
+      _logger.log('🔋 ERROR in togglePower: $e');
       ErrorHandler.logError('Toggle power', e);
       // Don't rethrow to avoid crashing UI, just log
     }
