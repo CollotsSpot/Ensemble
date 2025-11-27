@@ -43,30 +43,14 @@ class MiniPlayer extends StatelessWidget {
           child: Container(
             height: 80,
             margin: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
             child: Hero(
               tag: HeroTags.nowPlayingBackground,
               transitionOnUserGestures: true,
-              flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
-                // Use the destination widget for smooth transition in both directions
-                final Widget childWidget = direction == HeroFlightDirection.push
-                    ? toContext.widget
-                    : fromContext.widget;
-                return childWidget;
-              },
               child: Material(
-                color: Colors.transparent,
+                color: colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(20),
+                elevation: 4,
+                shadowColor: Colors.black.withOpacity(0.3),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
                   child: Padding(
@@ -77,6 +61,11 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingArt,
                           transitionOnUserGestures: true,
+                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
+                            return direction == HeroFlightDirection.push
+                                ? toContext.widget
+                                : fromContext.widget;
+                          },
                           child: Container(
                             width: 72,
                             height: 72,
@@ -159,6 +148,11 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingPreviousButton,
                           transitionOnUserGestures: true,
+                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
+                            return direction == HeroFlightDirection.push
+                                ? toContext.widget
+                                : fromContext.widget;
+                          },
                           child: Material(
                             color: Colors.transparent,
                             child: AnimatedIconButton(
@@ -183,6 +177,11 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingPlayButton,
                           transitionOnUserGestures: true,
+                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
+                            return direction == HeroFlightDirection.push
+                                ? toContext.widget
+                                : fromContext.widget;
+                          },
                           child: Material(
                             color: Colors.transparent,
                             child: AnimatedIconButton(
@@ -209,6 +208,11 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingNextButton,
                           transitionOnUserGestures: true,
+                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
+                            return direction == HeroFlightDirection.push
+                                ? toContext.widget
+                                : fromContext.widget;
+                          },
                           child: Material(
                             color: Colors.transparent,
                             child: AnimatedIconButton(
