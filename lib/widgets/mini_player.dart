@@ -61,11 +61,6 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingArt,
                           transitionOnUserGestures: true,
-                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
-                            return direction == HeroFlightDirection.push
-                                ? toContext.widget
-                                : fromContext.widget;
-                          },
                           child: Container(
                             width: 72,
                             height: 72,
@@ -148,11 +143,6 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingPreviousButton,
                           transitionOnUserGestures: true,
-                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
-                            return direction == HeroFlightDirection.push
-                                ? toContext.widget
-                                : fromContext.widget;
-                          },
                           child: Material(
                             color: Colors.transparent,
                             child: AnimatedIconButton(
@@ -177,11 +167,6 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingPlayButton,
                           transitionOnUserGestures: true,
-                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
-                            return direction == HeroFlightDirection.push
-                                ? toContext.widget
-                                : fromContext.widget;
-                          },
                           child: Material(
                             color: Colors.transparent,
                             child: AnimatedIconButton(
@@ -208,11 +193,6 @@ class MiniPlayer extends StatelessWidget {
                         Hero(
                           tag: HeroTags.nowPlayingNextButton,
                           transitionOnUserGestures: true,
-                          flightShuttleBuilder: (context, animation, direction, fromContext, toContext) {
-                            return direction == HeroFlightDirection.push
-                                ? toContext.widget
-                                : fromContext.widget;
-                          },
                           child: Material(
                             color: Colors.transparent,
                             child: AnimatedIconButton(
