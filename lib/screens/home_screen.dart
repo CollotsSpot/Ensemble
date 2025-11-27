@@ -54,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: kBottomNavigationBarHeight,
+                bottom: 0,
                 child: const MiniPlayer(),
               ),
           ],
