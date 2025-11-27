@@ -37,7 +37,7 @@ class MiniPlayer extends StatelessWidget {
           },
           child: Container(
             height: 80,
-            margin: const EdgeInsets.only(left: 8, right: 8),
+            margin: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
             decoration: BoxDecoration(
               color: colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(20),
