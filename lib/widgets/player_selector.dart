@@ -155,7 +155,13 @@ class PlayerSelector extends StatelessWidget {
                                       player.playerId == maProvider.selectedPlayer?.playerId;
                                   // isOn checks if the player is powered on
                                   final isOn = player.available && player.powered;
-                                  
+
+                                  // Debug log for each player
+                                  if (index == 0) {
+                                    print('📱 Device list opened, showing ${currentPlayers.length} players:');
+                                  }
+                                  print('   - ${player.name}: available=${player.available}, powered=${player.powered}, state=${player.state}');
+
                                   final colorScheme = Theme.of(context).colorScheme;
 
                                   return InkWell(
@@ -188,10 +194,14 @@ class PlayerSelector extends StatelessWidget {
                                               ),
                                               onPressed: player.available
                                                   ? () {
+                                                      print('🔋 Power button tapped for ${player.name} (${player.playerId})');
+                                                      print('🔋 Player available: ${player.available}, powered: ${player.powered}');
                                                       maProvider.togglePower(player.playerId);
                                                       // Don't close the sheet
                                                     }
-                                                  : null,
+                                                  : () {
+                                                      print('🔋 Power button tapped but DISABLED for ${player.name} (available: ${player.available})');
+                                                    },
                                             ),
                                           ),
                                           // Content
