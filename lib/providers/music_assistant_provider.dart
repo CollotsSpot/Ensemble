@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:just_audio/just_audio.dart';
 import '../models/media_item.dart';
 import '../models/player.dart';
 import '../services/music_assistant_api.dart';
@@ -155,9 +156,33 @@ class MusicAssistantProvider with ChangeNotifier {
     final position = _localPlayer.position.inSeconds.toDouble();
     final duration = _localPlayer.duration.inSeconds.toDouble();
 
-    // Use lowercase state values as expected by the server
-    final isPlaying = _localPlayer.isPlaying;
-    final state = isPlaying ? 'playing' : 'stopped';
+    // Robust state mapping logic
+    final playerState = _localPlayer.playerState;
+    final processingState = playerState.processingState;
+    final isPlaying = playerState.playing;
+
+    String state = 'stopped'; // Default to 'stopped' (safe value)
+
+    if (isPlaying) {
+      state = 'playing';
+    } else {
+      // Not playing, check processing state
+      switch (processingState) {
+        case ProcessingState.idle:
+          state = 'stopped'; // 'idle' was rejected by server, using 'stopped'
+          break;
+        case ProcessingState.loading:
+        case ProcessingState.buffering:
+          state = 'playing'; // Report as playing while loading to avoid flicker
+          break;
+        case ProcessingState.ready:
+          state = 'paused';
+          break;
+        case ProcessingState.completed:
+          state = 'stopped';
+          break;
+      }
+    }
 
     await _api!.updateBuiltinPlayerState(
       playerId,

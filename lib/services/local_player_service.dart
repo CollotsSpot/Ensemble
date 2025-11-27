@@ -16,6 +16,7 @@ class LocalPlayerService {
   
   // Current state getters
   bool get isPlaying => _player.playing;
+  PlayerState get playerState => _player.playerState;
   Duration get position => _player.position;
   Duration get duration => _player.duration ?? Duration.zero;
 
