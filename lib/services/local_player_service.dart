@@ -16,6 +16,7 @@ class LocalPlayerService {
   
   // Current state getters
   bool get isPlaying => _player.playing;
+  double get volume => _player.volume;
   PlayerState get playerState => _player.playerState;
   Duration get position => _player.position;
   Duration get duration => _player.duration ?? Duration.zero;
@@ -26,6 +27,20 @@ class LocalPlayerService {
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
+      
+      // Default to 100% volume
+      await _player.setVolume(1.0);
+      
+      // Log playback errors
+      _player.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          _logger.log('LocalPlayerService: Playback completed');
+        }
+      });
+      
+      _player.playbackEventStream.listen((event) {}, onError: (Object e, StackTrace stackTrace) {
+        _logger.log('LocalPlayerService: Playback error: $e');
+      });
       
       // Handle audio interruptions (e.g. phone calls)
       session.interruptionEventStream.listen((event) {

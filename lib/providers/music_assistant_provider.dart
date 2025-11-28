@@ -153,44 +153,24 @@ class MusicAssistantProvider with ChangeNotifier {
     final playerId = await SettingsService.getBuiltinPlayerId();
     if (playerId == null) return;
 
-    final position = _localPlayer.position.inSeconds.toDouble();
-    final duration = _localPlayer.duration.inSeconds.toDouble();
+    // Get current player state
+    final isPlaying = _localPlayer.isPlaying;
+    final position = _localPlayer.position.inSeconds;
+    final volume = (_localPlayer.volume * 100).round();
 
-    // Robust state mapping logic
-    final playerState = _localPlayer.playerState;
-    final processingState = playerState.processingState;
-    final isPlaying = playerState.playing;
+    // Calculate paused state: not playing but has a position (i.e., paused, not stopped)
+    final isPaused = !isPlaying && position > 0;
 
-    String state = 'paused'; // Default to 'paused' (safe value, 'stopped' and 'idle' were problematic)
-
-    if (isPlaying) {
-      state = 'playing';
-    } else {
-      // Not playing, check processing state
-      switch (processingState) {
-        case ProcessingState.idle:
-          state = 'paused'; // 'idle' was rejected, using 'paused'
-          break;
-        case ProcessingState.loading:
-        case ProcessingState.buffering:
-          state = 'playing'; // Report as playing while loading to avoid flicker
-          break;
-        case ProcessingState.ready:
-          state = 'paused';
-          break;
-        case ProcessingState.completed:
-          state = 'paused';
-          break;
-      }
-    }
-
+    // Send state as proper dataclass object (not string)
+    // Fixed: Server expects BuiltinPlayerState with boolean fields
     await _api!.updateBuiltinPlayerState(
       playerId,
-      state: state,
-      elapsedTime: position,
-      totalTime: duration > 0 ? duration : null,
       powered: _isLocalPlayerPowered,
-      available: true, // Local player is always available when enabled
+      playing: isPlaying,
+      paused: isPaused,
+      position: position,
+      volume: volume,
+      muted: _localPlayer.volume == 0.0,
     );
   }
 

@@ -1210,30 +1210,33 @@ class MusicAssistantAPI {
   }
   
   /// Send player state update to server
-  Future<void> updateBuiltinPlayerState(String playerId, {
-    String? state, // Player state enum value
-    int? volumeLevel, // 0-100
-    bool? volumeMuted,
-    double? elapsedTime, // seconds
-    double? totalTime, // seconds
-    bool? powered, // power state
-    bool? available, // availability state
+  /// Fixed: Server expects state as a dataclass object, not a string
+  /// See: music_assistant_models.builtin_player.BuiltinPlayerState
+  Future<void> updateBuiltinPlayerState(
+    String playerId, {
+    required bool powered,
+    required bool playing,
+    required bool paused,
+    required int position,
+    required int volume,
+    required bool muted,
   }) async {
     // This command allows the local player to report its status back to MA
     // so the server UI updates correctly
     try {
-      _logger.log('📊 Updating builtin player state: state=$state, powered=$powered, available=$available, elapsed=$elapsedTime');
+      _logger.log('📊 Updating builtin player state: powered=$powered, playing=$playing, paused=$paused, position=$position, volume=$volume, muted=$muted');
       await _sendCommand(
         'builtin_player/update_state',
         args: {
           'player_id': playerId,
-          if (state != null) 'state': state,
-          if (volumeLevel != null) 'volume_level': volumeLevel,
-          if (volumeMuted != null) 'volume_muted': volumeMuted,
-          if (elapsedTime != null) 'elapsed_time': elapsedTime,
-          if (totalTime != null) 'total_time': totalTime,
-          if (powered != null) 'powered': powered,
-          if (available != null) 'available': available,
+          'state': {
+            'powered': powered,
+            'playing': playing,
+            'paused': paused,
+            'position': position,
+            'volume': volume,
+            'muted': muted,
+          },
         },
       );
     } catch (e) {
