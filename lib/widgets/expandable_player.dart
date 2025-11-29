@@ -239,7 +239,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     const bottomNavHeight = 56.0;
     final collapsedBottomOffset = widget.hasBottomNav
         ? bottomNavHeight + bottomPadding + _collapsedMargin
-        : _collapsedMargin;
+        : bottomPadding + _collapsedMargin; // Include safe area even without nav
 
     final collapsedWidth = screenSize.width - (_collapsedMargin * 2);
     final width = lerpDouble(collapsedWidth, screenSize.width, t);
@@ -290,12 +290,14 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     final expandedArtistTop = expandedTitleTop + 40;
     final artistTop = lerpDouble(collapsedArtistTop, expandedArtistTop, t);
 
-    // Controls morphing
+    // Controls morphing - calculate based on actual button widths
+    // Collapsed: just prev(28) + play(34) + next(28) = 90, plus some padding
+    // Expanded: shuffle(48) + prev(42) + play(72) + next(42) + repeat(48) + gaps = ~300
     final collapsedControlsRight = 8.0;
-    final expandedControlsRight = (screenSize.width - 280) / 2; // Centered
-    final controlsRight = lerpDouble(collapsedControlsRight, expandedControlsRight, t);
+    final controlsRight = collapsedControlsRight; // Only used when collapsed
 
-    final collapsedControlsTop = (_collapsedHeight - 34) / 2;
+    // Vertical: in collapsed, center the 34px play button in 64px height
+    final collapsedControlsTop = (_collapsedHeight - 34) / 2 - 2; // Slight adjustment up
     final expandedControlsTop = expandedArtistTop + 100;
     final controlsTop = lerpDouble(collapsedControlsTop, expandedControlsTop, t);
 
@@ -493,11 +495,15 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                   ),
 
                 // Playback controls - morph from right side to centered
+                // When collapsed: position from right
+                // When expanded: center horizontally
                 Positioned(
-                  right: controlsRight,
+                  left: t > 0.5 ? 0 : null,
+                  right: t > 0.5 ? 0 : controlsRight,
                   top: controlsTop,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: t > 0.5 ? MainAxisAlignment.center : MainAxisAlignment.end,
                     children: [
                       // Shuffle button (fades in when expanded)
                       if (t > 0.5)
@@ -512,7 +518,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                             onPressed: _isLoadingQueue ? null : _toggleShuffle,
                           ),
                         ),
-                      if (t > 0.5) SizedBox(width: 12 * t),
+                      if (t > 0.5) const SizedBox(width: 12),
 
                       // Previous button
                       _buildMorphingControlButton(
@@ -548,7 +554,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                       ),
 
                       // Repeat button (fades in when expanded)
-                      if (t > 0.5) SizedBox(width: 12 * t),
+                      if (t > 0.5) const SizedBox(width: 12),
                       if (t > 0.5)
                         Opacity(
                           opacity: expandedElementsOpacity,
