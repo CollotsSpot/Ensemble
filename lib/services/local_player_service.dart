@@ -100,49 +100,67 @@ class LocalPlayerService {
     if (_isInitialized) return;
 
     try {
+      _logger.log('LocalPlayerService: Initializing... audioHandler=${audioHandler != null}');
+
+      // Always create fallback player as backup
+      _fallbackPlayer = AudioPlayer();
+      await _fallbackPlayer!.setVolume(1.0);
+      _logger.log('LocalPlayerService: Fallback player created');
+
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+
+      // Handle audio interruptions
+      session.interruptionEventStream.listen((event) {
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              if (_useAudioHandler) {
+                audioHandler!.setVolume(0.5);
+              } else {
+                _fallbackPlayer?.setVolume(0.5);
+              }
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (_useAudioHandler) {
+                audioHandler!.pause();
+              } else {
+                _fallbackPlayer?.pause();
+              }
+              break;
+          }
+        } else {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              if (_useAudioHandler) {
+                audioHandler!.setVolume(1.0);
+              } else {
+                _fallbackPlayer?.setVolume(1.0);
+              }
+              break;
+            case AudioInterruptionType.pause:
+              if (_useAudioHandler) {
+                audioHandler!.play();
+              } else {
+                _fallbackPlayer?.play();
+              }
+              break;
+            case AudioInterruptionType.unknown:
+              break;
+          }
+        }
+      });
+
       if (_useAudioHandler) {
         // Set auth headers on the audio handler
         final headers = authManager.getStreamingHeaders();
         if (headers.isNotEmpty) {
           audioHandler!.setAuthHeaders(headers);
         }
-        _logger.log('LocalPlayerService initialized with AudioHandler');
+        _logger.log('LocalPlayerService initialized with AudioHandler (background playback enabled)');
       } else {
-        // Fallback: create a basic AudioPlayer
-        _fallbackPlayer = AudioPlayer();
-
-        final session = await AudioSession.instance;
-        await session.configure(const AudioSessionConfiguration.music());
-
-        await _fallbackPlayer!.setVolume(1.0);
-
-        // Handle audio interruptions
-        session.interruptionEventStream.listen((event) {
-          if (event.begin) {
-            switch (event.type) {
-              case AudioInterruptionType.duck:
-                _fallbackPlayer?.setVolume(0.5);
-                break;
-              case AudioInterruptionType.pause:
-              case AudioInterruptionType.unknown:
-                _fallbackPlayer?.pause();
-                break;
-            }
-          } else {
-            switch (event.type) {
-              case AudioInterruptionType.duck:
-                _fallbackPlayer?.setVolume(1.0);
-                break;
-              case AudioInterruptionType.pause:
-                _fallbackPlayer?.play();
-                break;
-              case AudioInterruptionType.unknown:
-                break;
-            }
-          }
-        });
-
-        _logger.log('LocalPlayerService initialized with fallback AudioPlayer (no background playback)');
+        _logger.log('LocalPlayerService initialized with fallback player only (no background playback)');
       }
 
       _isInitialized = true;
