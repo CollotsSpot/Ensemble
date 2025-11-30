@@ -106,11 +106,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _passwordController.text.trim().isNotEmpty) {
         _logger.log('🔐 Attempting login with credentials...');
 
+        // Detect auth strategy first
+        final strategy = await provider.authManager.detectAuthStrategy(
+          _serverUrlController.text,
+        );
+
+        if (strategy == null) {
+          _showError('Could not detect authentication method for server.');
+          setState(() {
+            _isConnecting = false;
+          });
+          return;
+        }
+
+        // Get auth server URL if configured (for Authelia on separate domain)
+        final authServerUrl = await SettingsService.getAuthServerUrl();
+
         // Use the provider's authManager so credentials are available for WebSocket
         final success = await provider.authManager.login(
           _serverUrlController.text,
           _usernameController.text.trim(),
           _passwordController.text.trim(),
+          strategy,
+          authServerUrl: authServerUrl,
         );
 
         if (success) {
