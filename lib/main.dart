@@ -1,27 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'providers/music_assistant_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/settings_service.dart';
+import 'services/audio/massiv_audio_handler.dart';
+import 'services/auth/auth_manager.dart';
 import 'theme/theme_provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/system_theme_helper.dart';
 import 'widgets/global_player_overlay.dart';
 
+// Global audio handler instance
+late MassivAudioHandler audioHandler;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize just_audio_background for background playback and notifications
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'io.github.collotsspot.massiv.audio',
-    androidNotificationChannelName: 'Massiv Audio',
-    androidNotificationOngoing: true,
-    androidNotificationIcon: 'drawable/ic_notification',
+  // Create auth manager for streaming headers
+  final authManager = AuthManager();
+
+  // Initialize audio_service with our custom handler
+  audioHandler = await AudioService.init(
+    builder: () => MassivAudioHandler(authManager: authManager),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'io.github.collotsspot.massiv.audio',
+      androidNotificationChannelName: 'Massiv Audio',
+      androidNotificationOngoing: true,
+      androidNotificationIcon: 'drawable/ic_notification',
+      androidShowNotificationBadge: false,
+      androidStopForegroundOnPause: false,
+    ),
   );
-  print('🎵 JustAudioBackground initialized - background playback and media notifications ENABLED');
+  print('🎵 AudioService initialized - background playback and media notifications ENABLED');
 
   // Set preferred orientations
   SystemChrome.setPreferredOrientations([
