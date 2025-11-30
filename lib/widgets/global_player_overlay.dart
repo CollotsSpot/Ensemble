@@ -7,7 +7,7 @@ import 'expandable_player.dart';
 final globalPlayerKey = GlobalKey<ExpandablePlayerState>();
 
 /// Key for the overlay state to control visibility
-final _overlayKey = GlobalKey<_GlobalPlayerOverlayState>();
+final _overlayStateKey = GlobalKey<_GlobalPlayerOverlayState>();
 
 /// Wrapper widget that provides a global player overlay above all navigation.
 ///
@@ -17,10 +17,9 @@ final _overlayKey = GlobalKey<_GlobalPlayerOverlayState>();
 class GlobalPlayerOverlay extends StatefulWidget {
   final Widget child;
 
-  const GlobalPlayerOverlay({
-    super.key,
+  GlobalPlayerOverlay({
     required this.child,
-  });
+  }) : super(key: _overlayStateKey);
 
   @override
   State<GlobalPlayerOverlay> createState() => _GlobalPlayerOverlayState();
@@ -36,12 +35,12 @@ class GlobalPlayerOverlay extends StatefulWidget {
 
   /// Hide the mini player temporarily (e.g., when showing device selector)
   static void hidePlayer() {
-    _overlayKey.currentState?._setHidden(true);
+    _overlayStateKey.currentState?._setHidden(true);
   }
 
   /// Show the mini player again
   static void showPlayer() {
-    _overlayKey.currentState?._setHidden(false);
+    _overlayStateKey.currentState?._setHidden(false);
   }
 }
 
@@ -57,7 +56,6 @@ class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay> {
   @override
   Widget build(BuildContext context) {
     return Stack(
-      key: _overlayKey,
       children: [
         // The main app content (Navigator, screens, etc.)
         widget.child,

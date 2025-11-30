@@ -246,77 +246,56 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     final borderRadius = _lerpDouble(_collapsedBorderRadius, 0, t);
 
     // Calculate available space for expanded layout
-    // We'll use bottom-anchored positioning for controls section
+    // Available height = expandedHeight - topPadding - header(60) - bottomPadding(20)
+    final availableHeight = expandedHeight - topPadding - 80;
 
-    // Art size calculations - FULL WIDTH for expanded
-    final expandedArtSize = screenSize.width;  // Full width
+    // Distribute space: art(40%) + info(25%) + controls(20%) + volume(15%)
+    final expandedArtSize = (screenSize.width * 0.70).clamp(200.0, 320.0);
     final artSize = _lerpDouble(_collapsedArtSize, expandedArtSize, t);
-    final artBorderRadius = _lerpDouble(_collapsedBorderRadius, 0, t);  // No border radius when full width
+    final artBorderRadius = _lerpDouble(_collapsedBorderRadius, 16, t);
 
-    // Art position - full width, positioned at top with header space
+    // Art position - centered horizontally, positioned with good top margin
     final collapsedArtLeft = 0.0;
-    final expandedArtLeft = 0.0;  // Start at left edge
+    final expandedArtLeft = (screenSize.width - expandedArtSize) / 2;
     final artLeft = _lerpDouble(collapsedArtLeft, expandedArtLeft, t);
 
     final collapsedArtTop = 0.0;
-    // Position art below the header (collapse button and player name)
+    // Position art with comfortable top spacing
     final expandedArtTop = topPadding + 56;
     final artTop = _lerpDouble(collapsedArtTop, expandedArtTop, t);
 
-    // BOTTOM-ANCHORED LAYOUT for expanded view
-    // Volume at very bottom, then controls (equidistant), then progress bar
-    final expandedVolumeBottom = 24.0;  // Distance from bottom of container
-    final expandedProgressBottom = 180.0;  // Progress bar from bottom
-
-    // Controls positioned exactly between progress bar and volume
-    // Progress bar bottom edge is at (expandedHeight - expandedProgressBottom)
-    // Volume top edge is at (expandedHeight - expandedVolumeBottom - 48)
-    final progressBottomEdge = expandedHeight - expandedProgressBottom + 60;  // Bottom of progress section
-    final volumeTopEdge = expandedHeight - expandedVolumeBottom - 48;  // Top of volume
-    final controlsZoneHeight = volumeTopEdge - progressBottomEdge;
-    final expandedControlsTop = progressBottomEdge + (controlsZoneHeight - 68) / 2;  // Center controls
-
-    // Convert bottom offsets to top positions for expanded state
-    final expandedVolumeTop = expandedHeight - expandedVolumeBottom - 48;  // 48 is volume control height
-    final expandedProgressTop = expandedHeight - expandedProgressBottom;
-
-    // Track info positioned in the middle zone between art and progress bar
-    final infoZoneTop = expandedArtTop + expandedArtSize + 20;
-    final infoZoneBottom = expandedProgressTop - 16;
-    final infoZoneHeight = infoZoneBottom - infoZoneTop;
-
-    // Center the track info vertically in the info zone
-    // Title (up to 2 lines ~60px) + Artist (~24px) + Album (~20px) + spacing = ~120px total
-    final infoContentHeight = 120.0;
-    final infoVerticalOffset = ((infoZoneHeight - infoContentHeight) / 2).clamp(0.0, 40.0);
-
-    // Track title morphing - BIGGER text
-    final titleFontSize = _lerpDouble(14.0, 26.0, t);  // Increased from 22 to 26
+    // Track title morphing - account for 2-line titles (max ~60px height)
+    final titleFontSize = _lerpDouble(14.0, 22.0, t);
     final collapsedTitleLeft = _collapsedArtSize + 12;
     final expandedTitleLeft = 24.0;
     final titleLeft = _lerpDouble(collapsedTitleLeft, expandedTitleLeft, t);
 
     final collapsedTitleTop = (_collapsedHeight - 32) / 2;
-    final expandedTitleTop = infoZoneTop + infoVerticalOffset;
+    // Space after art for title
+    final expandedTitleTop = expandedArtTop + expandedArtSize + 24;
     final titleTop = _lerpDouble(collapsedTitleTop, expandedTitleTop, t);
 
     final collapsedTitleWidth = screenSize.width - _collapsedArtSize - 150;
     final expandedTitleWidth = screenSize.width - 48;
     final titleWidth = _lerpDouble(collapsedTitleWidth, expandedTitleWidth, t);
 
-    // Artist name - BIGGER text, directly below title
-    final artistFontSize = _lerpDouble(12.0, 18.0, t);  // Increased from 15 to 18
+    // Artist name morphing - positioned after title with enough gap for 2-line title
+    final artistFontSize = _lerpDouble(12.0, 15.0, t);
     final collapsedArtistTop = collapsedTitleTop + 18;
-    // Use smaller gap - text measurement isn't perfect so just use fixed offset
-    final expandedArtistTop = expandedTitleTop + 60;  // Room for 2-line title (increased)
+    // Add 56px gap to account for potential 2-line title (22px * 2 + padding)
+    final expandedArtistTop = expandedTitleTop + 56;
     final artistTop = _lerpDouble(collapsedArtistTop, expandedArtistTop, t);
 
-    // Album name position (only shown expanded) - slightly bigger
-    final expandedAlbumTop = expandedArtistTop + 28;
+    // Album name position (only shown expanded)
+    final expandedAlbumTop = expandedArtistTop + 24;
 
-    // Controls positioning
+    // Progress bar position
+    final expandedProgressTop = expandedAlbumTop + 32;
+
+    // Controls - positioned after progress bar
     final collapsedControlsRight = 8.0;
     final collapsedControlsTop = (_collapsedHeight - 34) / 2 - 6;
+    final expandedControlsTop = expandedProgressTop + 56;
     final controlsTop = _lerpDouble(collapsedControlsTop, expandedControlsTop, t);
 
     final skipButtonSize = _lerpDouble(28, 40, t);
@@ -325,8 +304,8 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
 
     final expandedElementsOpacity = Curves.easeIn.transform((t - 0.5).clamp(0, 0.5) * 2);
 
-    // Volume control top position
-    final volumeTop = expandedVolumeTop;
+    // Volume control - at the bottom with more spacing from controls
+    final volumeTop = expandedControlsTop + 100;
 
     return Positioned(
       left: horizontalMargin,
@@ -440,7 +419,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                         currentTrack.album!.name,
                         style: TextStyle(
                           color: textColor.withOpacity(0.5),
-                          fontSize: 16,  // Increased from 14
+                          fontSize: 14,
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
