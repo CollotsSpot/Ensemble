@@ -105,7 +105,7 @@ class LocalPlayerService {
     String? artworkUrl,
     Duration? duration,
   }) {
-    audioHandler.updateMediaItem(
+    audioHandler.updateCurrentMediaItem(
       id: id,
       title: title,
       artist: artist,

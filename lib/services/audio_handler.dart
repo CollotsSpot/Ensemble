@@ -208,7 +208,7 @@ class MassivAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   /// Update the currently displayed media item (for when track changes from server)
-  void updateMediaItem({
+  void updateCurrentMediaItem({
     required String id,
     required String title,
     String? artist,
@@ -246,7 +246,7 @@ Future<MassivAudioHandler> initAudioHandler() async {
       androidNotificationChannelId: 'io.github.collotsspot.massiv.audio',
       androidNotificationChannelName: 'Massiv Audio',
       androidNotificationChannelDescription: 'Music playback controls',
-      androidNotificationOngoing: true,
+      androidNotificationOngoing: false,
       androidStopForegroundOnPause: false,
       androidNotificationIcon: 'drawable/ic_notification',
       fastForwardInterval: Duration(seconds: 10),
