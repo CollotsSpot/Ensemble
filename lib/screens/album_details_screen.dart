@@ -6,6 +6,7 @@ import '../constants/hero_tags.dart';
 import '../theme/palette_helper.dart';
 import '../theme/theme_provider.dart';
 import '../services/metadata_service.dart';
+import '../widgets/global_player_overlay.dart';
 import 'artist_details_screen.dart';
 
 class AlbumDetailsScreen extends StatefulWidget {
@@ -844,6 +845,9 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
     final maProvider = context.read<MusicAssistantProvider>();
     final players = maProvider.availablePlayers;
 
+    // Slide the mini player down
+    GlobalPlayerOverlay.hidePlayer();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -894,7 +898,10 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
           ],
         ),
       ),
-    );
+    ).whenComplete(() {
+      // Slide the mini player back up
+      GlobalPlayerOverlay.showPlayer();
+    });
   }
 
   String _formatDuration(Duration duration) {

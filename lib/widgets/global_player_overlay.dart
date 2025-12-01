@@ -44,12 +44,42 @@ class GlobalPlayerOverlay extends StatefulWidget {
   }
 }
 
-class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay> {
+class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay>
+    with SingleTickerProviderStateMixin {
   bool _isHidden = false;
+  late AnimationController _hideController;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _hideController = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0, 1.5), // Slide down below screen
+    ).animate(CurvedAnimation(
+      parent: _hideController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _hideController.dispose();
+    super.dispose();
+  }
 
   void _setHidden(bool hidden) {
     if (_isHidden != hidden) {
-      setState(() => _isHidden = hidden);
+      _isHidden = hidden;
+      if (hidden) {
+        _hideController.forward();
+      } else {
+        _hideController.reverse();
+      }
     }
   }
 
@@ -59,9 +89,10 @@ class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay> {
       children: [
         // The main app content (Navigator, screens, etc.)
         widget.child,
-        // Global player overlay - sits above everything
-        if (!_isHidden)
-          Consumer<MusicAssistantProvider>(
+        // Global player overlay - sits above everything, animates when hidden
+        SlideTransition(
+          position: _slideAnimation,
+          child: Consumer<MusicAssistantProvider>(
             builder: (context, maProvider, _) {
               // Only show player if connected and has a track
               if (!maProvider.isConnected ||
@@ -72,6 +103,7 @@ class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay> {
               return ExpandablePlayer(key: globalPlayerKey);
             },
           ),
+        ),
       ],
     );
   }
