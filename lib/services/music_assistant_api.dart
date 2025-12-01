@@ -1448,7 +1448,9 @@ class MusicAssistantAPI {
       final result = await _sendCommand('config/players');
 
       if (result is List) {
-        final configs = result.cast<Map<String, dynamic>>();
+        final configs = result
+            .map((e) => e as Map<String, dynamic>)
+            .toList();
         _logger.log('📋 Got ${configs.length} player configs');
         return configs;
       }
