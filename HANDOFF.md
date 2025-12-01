@@ -3,8 +3,8 @@
 ## Current State
 
 - **Branch:** `feature/fix-local-player-isolation`
-- **Last build:** TBD (needs to be triggered)
-- **Previous branch:** `feature/audio-service-migration` (contains audio_service migration work)
+- **Last build:** 2025-12-01 (run 19821514108)
+- **Status:** Player isolation WORKING, ghost players hidden from UI
 
 ## CRITICAL BUG FIXED: Local Player Isolation
 
@@ -37,24 +37,46 @@ The `DeviceIdService` generated player IDs by hashing hardware characteristics (
 **File:** `lib/screens/login_screen.dart`
 - Added `_ownerNameController` text field controller
 - Added "Your Name" field after server URL, before port
-- Placeholder: "e.g., Chris, Mom, Dad"
+- Placeholder: "Your first name" (no examples)
 - Validation: Required, non-empty
 - Saves to `SettingsService.setOwnerName()` on successful connection
 - Loads saved owner name on screen init
 
-#### 4. Removed Local Player Settings Section
+#### 4. Ghost Player Handling
+**File:** `lib/providers/music_assistant_provider.dart`
+- Unavailable players are now **filtered out** of the player list
+- Only the user's own player is kept even if temporarily unavailable
+- Ghost players (old installations) don't clutter the player selector
+- Note: MA server's `players/remove` API doesn't permanently delete players - they get rediscovered
+
 **File:** `lib/screens/settings_screen.dart`
-- Removed `_localPlayerNameController` (no longer needed)
+- Removed "Ghost Players" purge button (it didn't work - MA re-adds them)
 - Removed entire "Local Player" section (device name customization, enable/disable toggle)
-- Moved "Ghost Players" purge button to appear after Disconnect button
 - Local playback is now always enabled when connected
 
 ### Migration Strategy
 - Existing installations with legacy hardware-based IDs will automatically migrate on next app start
 - New UUID is generated and stored in `local_player_id`
 - Legacy keys (`device_player_id`, `builtin_player_id`) are detected but not deleted
-- No attempt to clean up old player from server (user can use "Purge Unavailable Players")
+- Old ghost players remain on MA server but are hidden from app UI
 - Owner name defaults to empty; user will be prompted on next login
+
+## Test Results (2025-12-01)
+
+### Player Isolation - VERIFIED WORKING
+- Chris' Phone shows as `ensemble_e57c360f-7c09-4e26-a495-9caf192343d9`
+- Playing to "Chris' Phone" works correctly
+- No other players triggered simultaneously
+
+### Ghost Players - HIDDEN FROM UI
+Ghost players on MA server (not visible in MA web UI, but returned by API):
+- Phone (massiv_f45e2bd06bf8) - Available: false
+- This device (7cf36283-...) - Available: false
+- This Device (ma_3bgw7ae5oy) - Available: false
+- This Device (ma_wjpkuwuzv7) - Available: false
+- Ensemble (massiv_b66ced8381b4) - Available: false
+
+These are now filtered out of the player selector since they're unavailable.
 
 ## Previous Work (audio_service Migration)
 
@@ -75,38 +97,58 @@ The `DeviceIdService` generated player IDs by hashing hardware characteristics (
 - `lib/services/device_id_service.dart` - **REWRITTEN** to use UUID instead of hardware hash
 - `lib/services/settings_service.dart` - Added owner name storage and player name derivation
 - `lib/screens/login_screen.dart` - Added "Your Name" field, validates owner name
-- `lib/screens/settings_screen.dart` - Removed "Local Player" customization section
-
-## What Needs Testing (Current Build)
-
-### Critical Test - Player Isolation
-1. Install app on two devices of the same model (e.g., two Pixel 8 phones)
-2. Login with different owner names (e.g., "Chris" and "Sarah")
-3. Verify each device gets unique player ID starting with `ensemble_`
-4. Verify player names show as "Chris' Phone" and "Sarah's Phone"
-5. Play music on one device - verify other device does NOT start playing
-6. Check Music Assistant server shows TWO distinct players
-
-### Owner Name Field
-1. Login screen shows "Your Name" field after server URL, before port
-2. Field is required - shows error if empty
-3. Owner name is saved and persists across app restarts
-4. Player name correctly handles possessive apostrophes
-
-### Settings Screen
-1. "Local Player" section is removed
-2. "Ghost Players" button still appears when connected
-3. No device name customization or local playback toggle
-
-### Migration from Legacy
-1. Existing installations detect legacy hardware-based ID
-2. New UUID is generated automatically
-3. Old player appears as "unavailable" in Music Assistant
-4. User can purge unavailable players manually
+- `lib/screens/settings_screen.dart` - Removed "Local Player" and "Ghost Players" sections
+- `lib/providers/music_assistant_provider.dart` - Filter unavailable players from list
 
 ## Outstanding Issues / Next Features
 
-### 1. Remote Player Notification (HIGH PRIORITY)
+### 1. Ghost Player Prevention (MEDIUM PRIORITY)
+
+**Problem:** Ghost players accumulate on the MA server when users:
+- Clear app data
+- Uninstall/reinstall the app
+- Get a new phone (SharedPreferences don't transfer)
+
+Each of these creates a NEW UUID, leaving the old player as an unavailable ghost.
+
+**Current mitigation:** Unavailable players are hidden from the app UI, but they still exist on MA server.
+
+**Potential Solutions:**
+
+#### Option A: Auto-cleanup on connect
+When the app connects and registers the local player, automatically remove other unavailable builtin players.
+
+```dart
+On connect:
+1. Register our player (ensemble_<uuid>)
+2. Find all unavailable builtin players that aren't ours
+3. Remove them via builtin_player/unregister
+```
+
+**Pros:** Simple, automatic, no user interaction needed
+**Cons:** `players/remove` doesn't permanently delete (MA re-adds them); `builtin_player/unregister` might work better
+
+#### Option B: Tie ID to owner name on server
+Store a mapping of owner name → player ID on the MA server. When "Chris" connects, reuse the existing player ID.
+
+**Pros:** Truly persistent across reinstalls
+**Cons:** Requires server-side storage, more complex
+
+#### Option C: Use Android backup system
+Ensure SharedPreferences are backed up to Google Drive so the UUID persists across device changes.
+
+**Pros:** Uses existing Android infrastructure
+**Cons:** Not guaranteed to work, user must have backup enabled
+
+#### Option D: Prompt user to reuse existing player
+On first connect, check if there's an unavailable player matching the owner name pattern. Ask user: "Found existing player 'Chris' Phone' - reuse it?"
+
+**Pros:** User control, handles edge cases
+**Cons:** More UI complexity, confusing for non-technical users
+
+**Recommended approach:** Start with Option A (auto-cleanup on connect). If `builtin_player/unregister` works better than `players/remove`, use that.
+
+### 2. Remote Player Notification (HIGH PRIORITY)
 **Problem:** Notification ONLY shows when playing locally on the phone. When controlling a remote player (e.g., Dining Room), there's NO notification at all.
 
 **Why:** `audio_service` creates notifications for local audio playback only. When a remote player is active, the phone is just a remote control with no local audio.

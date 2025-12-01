@@ -1235,66 +1235,72 @@ class MusicAssistantAPI {
     }
   }
 
-  /// Clean up unavailable builtin players (ghost players from old installations)
+  /// Clean up unavailable ghost players from old app installations
+  /// Uses builtin_player/unregister which actually removes from MA storage
   Future<void> cleanupUnavailableBuiltinPlayers() async {
     try {
-      _logger.log('🧹 Starting cleanup of unavailable builtin players...');
+      _logger.log('🧹 Starting auto-cleanup of ghost players...');
 
       // Get all players from the server
       final allPlayers = await getPlayers();
 
       // Get current builtin player ID to avoid deleting ourselves
       final currentPlayerId = await SettingsService.getBuiltinPlayerId();
-      final localPlayerName = await SettingsService.getLocalPlayerName();
 
       _logger.log('🧹 Current player ID: $currentPlayerId');
-      _logger.log('🧹 Local player name: $localPlayerName');
       _logger.log('🧹 Total players from server: ${allPlayers.length}');
 
-      // Find unavailable builtin players
-      // Detection: provider == 'builtin_player' OR name matches our local player name pattern
+      // Find ghost players - unavailable players that look like they came from our app
+      // Detection by ID pattern: ensemble_*, massiv_*, ma_* (MA's builtin), or UUID format
       final ghostPlayers = allPlayers.where((player) {
-        // Check if this is a builtin player by provider field or name
-        final isBuiltinByProvider = player.provider == 'builtin_player';
-        final isBuiltinByName = player.name.toLowerCase() == localPlayerName.toLowerCase() ||
-            player.name.toLowerCase().contains('massiv') ||
-            player.name.toLowerCase() == 'this device';
-        final isBuiltinPlayer = isBuiltinByProvider || isBuiltinByName;
+        final playerId = player.playerId.toLowerCase();
 
+        // Check if this looks like a builtin player from our app or MA's builtin provider
+        final isAppPlayer = playerId.startsWith('ensemble_') ||
+                           playerId.startsWith('massiv_') ||
+                           playerId.startsWith('ma_') ||
+                           player.provider == 'builtin_player';
+
+        // Also catch by name patterns
+        final nameLower = player.name.toLowerCase();
+        final isBuiltinByName = nameLower.contains('phone') ||
+                               nameLower.contains('this device') ||
+                               nameLower.contains('massiv') ||
+                               nameLower.contains('ensemble');
+
+        final isGhostCandidate = isAppPlayer || isBuiltinByName;
         final isUnavailable = !player.available;
         final isNotCurrentPlayer = player.playerId != currentPlayerId;
 
-        _logger.log('🧹 Player: ${player.name} (${player.playerId}) - provider: ${player.provider}, available: ${player.available}, isBuiltin: $isBuiltinPlayer, isNotCurrent: $isNotCurrentPlayer');
-
-        return isBuiltinPlayer && isUnavailable && isNotCurrentPlayer;
+        return isGhostCandidate && isUnavailable && isNotCurrentPlayer;
       }).toList();
 
       if (ghostPlayers.isEmpty) {
-        _logger.log('✅ No ghost players found - cleanup complete');
+        _logger.log('✅ No ghost players found');
         return;
       }
 
-      _logger.log('🗑️ Found ${ghostPlayers.length} ghost player(s) to remove:');
+      _logger.log('🗑️ Found ${ghostPlayers.length} ghost player(s) to clean up:');
       for (final player in ghostPlayers) {
         _logger.log('   - ${player.name} (${player.playerId})');
       }
 
-      // Remove each ghost player using players/remove (not builtin_player/unregister)
-      // The unregister endpoint only disconnects but doesn't delete from storage
-      int removedCount = 0;
+      // Unregister each ghost player using builtin_player/unregister
+      // This should actually remove them from MA's storage
+      int cleanedCount = 0;
       for (final player in ghostPlayers) {
         try {
-          await removePlayer(player.playerId);
-          removedCount++;
-          _logger.log('✅ Removed: ${player.name}');
+          await unregisterBuiltinPlayer(player.playerId);
+          cleanedCount++;
+          _logger.log('✅ Unregistered: ${player.name}');
         } catch (e) {
-          _logger.log('⚠️ Failed to remove ghost player ${player.playerId}: $e');
+          _logger.log('⚠️ Failed to unregister ${player.name}: $e');
         }
       }
 
-      _logger.log('✅ Cleanup complete - removed $removedCount ghost player(s)');
+      _logger.log('✅ Auto-cleanup complete - unregistered $cleanedCount ghost player(s)');
     } catch (e) {
-      _logger.log('❌ Error during cleanup of unavailable builtin players: $e');
+      _logger.log('❌ Error during ghost player cleanup: $e');
       // Don't rethrow - cleanup should be non-fatal
     }
   }
