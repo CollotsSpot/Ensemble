@@ -13,31 +13,53 @@ class QueueScreen extends StatefulWidget {
 class _QueueScreenState extends State<QueueScreen> {
   PlayerQueue? _queue;
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadQueue();
+    // Use addPostFrameCallback to safely access context after build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadQueue();
+    });
   }
 
   Future<void> _loadQueue() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
+      _error = null;
     });
 
-    final maProvider = context.read<MusicAssistantProvider>();
-    final player = maProvider.selectedPlayer;
+    try {
+      final maProvider = context.read<MusicAssistantProvider>();
+      final player = maProvider.selectedPlayer;
 
-    if (player != null && maProvider.api != null) {
-      final queue = await maProvider.api!.getQueue(player.playerId);
-      setState(() {
-        _queue = queue;
-        _isLoading = false;
-      });
-    } else {
-      setState(() {
-        _isLoading = false;
-      });
+      if (player != null && maProvider.api != null) {
+        final queue = await maProvider.api!.getQueue(player.playerId);
+        if (mounted) {
+          setState(() {
+            _queue = queue;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _error = 'No player selected';
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ QueueScreen error loading queue: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = 'Failed to load queue: $e';
+        });
+      }
     }
   }
 
@@ -74,6 +96,28 @@ class _QueueScreenState extends State<QueueScreen> {
   Widget _buildBody(MusicAssistantProvider maProvider) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
+            const SizedBox(height: 16),
+            Text(
+              _error!,
+              style: TextStyle(color: Colors.red[300], fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadQueue,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
     }
 
     if (maProvider.selectedPlayer == null) {
