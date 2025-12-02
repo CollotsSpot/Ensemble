@@ -662,6 +662,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                       child: IconButton(
                         icon: Icon(Icons.queue_music_rounded, color: textColor, size: 24),
                         onPressed: () {
+                          print('🎵 Queue button pressed!');
                           Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const QueueScreen()),
                           );
