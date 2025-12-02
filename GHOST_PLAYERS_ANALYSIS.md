@@ -345,6 +345,113 @@ Old ghost players can be cleaned up by:
 
 ---
 
+## Critical Issue: Corrupted Player Config Crashes MA Server
+
+**Discovered**: 2025-12-02
+
+### Symptoms
+
+- Music Assistant server enters a restart loop
+- 404 errors when trying to access MA web UI
+- Docker shows: `musicassistant   Restarting (1) X seconds ago`
+- Logs show:
+  ```
+  KeyError: 'provider'
+  File "config.py", line 1319, in _migrate
+      player_provider = player_config["provider"]
+  ```
+
+### Root Cause
+
+Some ghost player entries in `settings.json` can become corrupted and lose required fields (like `provider`). When MA starts, it tries to migrate/load these configs and crashes because required fields are missing.
+
+**Example of corrupted entries** (missing `provider` field):
+```json
+"ma_wjpkuwuzv7": {
+  "default_name": "This Device"
+},
+"ensemble_43d1f583-a0ef-4945-8447-01bb803eeea9": {
+  "default_name": "Chris' Phone"
+}
+```
+
+**Example of valid entry** (has `provider` field):
+```json
+"ensemble_4be5077a-2a21-42c3-9d06-2eaf48ae8ca7": {
+  "values": {},
+  "provider": "builtin_player",
+  "player_id": "ensemble_4be5077a-2a21-42c3-9d06-2eaf48ae8ca7",
+  "enabled": true,
+  "name": null,
+  "available": true,
+  "default_name": "Kat's Phone"
+}
+```
+
+### How to Fix
+
+1. **Stop MA** (if not already in restart loop):
+   ```bash
+   docker stop musicassistant
+   ```
+
+2. **Backup settings.json**:
+   ```bash
+   cp /home/home-server/docker/music-assistant/data/settings.json \
+      /home/home-server/docker/music-assistant/data/settings.json.backup-corrupt-fix
+   ```
+
+3. **Remove corrupted entries** (entries missing `provider` field):
+   ```bash
+   # Filter out entries that don't have a provider field
+   cat /home/home-server/docker/music-assistant/data/settings.json | \
+     jq '.players |= with_entries(select(.value | has("provider")))' > /tmp/settings_fixed.json
+   ```
+
+4. **Apply the fix** (need root or docker):
+   ```bash
+   # Via docker volume mount
+   docker run --rm \
+     -v /home/home-server/docker/music-assistant/data:/data \
+     -v /tmp:/tmp \
+     alpine cp /tmp/settings_fixed.json /data/settings.json
+   ```
+
+5. **Start MA**:
+   ```bash
+   docker start musicassistant
+   ```
+
+6. **Verify**:
+   ```bash
+   # Should show "Up X seconds" not "Restarting"
+   docker ps | grep music
+
+   # Should return 200
+   curl -s http://192.168.4.120:8095/ -o /dev/null -w "%{http_code}"
+   ```
+
+### Prevention
+
+The corruption likely occurs when:
+- The app disconnects abruptly during player registration
+- MA server restarts while builtin player is mid-registration
+- Network issues during player state updates
+
+The app's ghost adoption and cleanup mechanisms try to prevent accumulation, but corrupted entries can still occur server-side.
+
+### Quick Diagnostic
+
+To check for corrupted entries without stopping MA:
+```bash
+cat /home/home-server/docker/music-assistant/data/settings.json | \
+  jq '.players | to_entries[] | select(.value | has("provider") | not) | .key'
+```
+
+This will list any player IDs that are missing the `provider` field.
+
+---
+
 ## Related Issue: Cross-Device Playback
 
 A separate but related issue was that playing on one phone would trigger playback on another phone.
