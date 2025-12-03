@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/music_assistant_provider.dart';
 import '../models/player.dart';
-import '../screens/queue_screen.dart';
 import '../theme/palette_helper.dart';
 import '../theme/theme_provider.dart';
 import 'animated_icon_button.dart';
@@ -764,15 +763,20 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                 // Queue panel (slides in from right)
                 if (t > 0.5 && queueT > 0)
                   Positioned.fill(
-                    child: Transform.translate(
-                      offset: Offset(width * (1 - queueT), 0),
-                      child: _buildQueuePanel(
-                        maProvider,
-                        selectedPlayer,
-                        textColor,
-                        primaryColor,
-                        topPadding,
-                        expandedBg,
+                    child: RepaintBoundary(
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(1, 0),
+                          end: Offset.zero,
+                        ).animate(_queuePanelAnimation),
+                        child: _buildQueuePanel(
+                          maProvider,
+                          selectedPlayer,
+                          textColor,
+                          primaryColor,
+                          topPadding,
+                          expandedBg,
+                        ),
                       ),
                     ),
                   ),
@@ -860,6 +864,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 8),
+      cacheExtent: 500, // Pre-render items off-screen for smoother scrolling
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
