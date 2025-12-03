@@ -5,7 +5,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/network.dart';
-import '../constants/timings.dart';
+import '../constants/timings.dart' show Timings, LibraryConstants;
 import '../models/media_item.dart';
 import '../models/player.dart';
 import 'debug_logger.dart';
@@ -422,9 +422,9 @@ class MusicAssistantAPI {
 
   /// Get recently played albums
   /// Gets recently played tracks, then fetches full track details to extract album info
+  /// Optimized: batches track lookups to avoid N+1 query problem
   Future<List<Album>> getRecentAlbums({int limit = 10}) async {
     try {
-
       // Get recently played tracks (simplified objects)
       final response = await _sendCommand(
         'music/recently_played_items',
@@ -440,38 +440,58 @@ class MusicAssistantAPI {
         return [];
       }
 
-      // Fetch full track details to get album data
-      final seenAlbumIds = <String>{};
-      final albums = <Album>[];
-
+      // Collect track URIs for batch lookup
+      final trackUris = <String>[];
       for (final item in items) {
-        if (albums.length >= limit) break;
-
-        try {
-          final trackUri = (item as Map<String, dynamic>)['uri'] as String?;
-          if (trackUri == null) continue;
-
-          final trackResponse = await _sendCommand(
-            'music/item_by_uri',
-            args: {'uri': trackUri},
-          ).timeout(const Duration(seconds: 3), onTimeout: () => <String, dynamic>{'result': null});
-
-          final fullTrack = trackResponse['result'] as Map<String, dynamic>?;
-          final albumData = fullTrack?['album'] as Map<String, dynamic>?;
-
-          if (albumData != null) {
-            final albumId = albumData['item_id']?.toString() ?? albumData['uri']?.toString();
-            if (albumId != null && !seenAlbumIds.contains(albumId)) {
-              seenAlbumIds.add(albumId);
-              albums.add(Album.fromJson(albumData));
-            }
-          }
-        } catch (_) {
-          // Skip tracks that fail to fetch
-          continue;
+        final trackUri = (item as Map<String, dynamic>)['uri'] as String?;
+        if (trackUri != null) {
+          trackUris.add(trackUri);
         }
       }
 
+      if (trackUris.isEmpty) {
+        return [];
+      }
+
+      // Batch fetch track details using parallel requests (max 5 concurrent)
+      final seenAlbumIds = <String>{};
+      final albums = <Album>[];
+
+      // Process in batches to avoid overwhelming the server
+      const batchSize = LibraryConstants.recentAlbumsBatchSize;
+      for (var i = 0; i < trackUris.length && albums.length < limit; i += batchSize) {
+        final batch = trackUris.skip(i).take(batchSize).toList();
+
+        // Fetch batch in parallel
+        final futures = batch.map((uri) => _sendCommand(
+          'music/item_by_uri',
+          args: {'uri': uri},
+        ).timeout(const Duration(seconds: 5), onTimeout: () => <String, dynamic>{'result': null}));
+
+        final results = await Future.wait(futures, eagerError: false);
+
+        for (final trackResponse in results) {
+          if (albums.length >= limit) break;
+
+          try {
+            final fullTrack = trackResponse['result'] as Map<String, dynamic>?;
+            final albumData = fullTrack?['album'] as Map<String, dynamic>?;
+
+            if (albumData != null) {
+              final albumId = albumData['item_id']?.toString() ?? albumData['uri']?.toString();
+              if (albumId != null && !seenAlbumIds.contains(albumId)) {
+                seenAlbumIds.add(albumId);
+                albums.add(Album.fromJson(albumData));
+              }
+            }
+          } catch (_) {
+            // Skip tracks that fail to parse
+            continue;
+          }
+        }
+      }
+
+      _logger.log('📚 Fetched ${albums.length} recent albums using ${(trackUris.length / batchSize).ceil()} batch requests');
       return albums;
     } catch (e) {
       _logger.log('❌ Error getting recent albums: $e');

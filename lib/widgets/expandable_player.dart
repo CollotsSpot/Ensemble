@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/timings.dart';
 import '../providers/music_assistant_provider.dart';
 import '../models/player.dart';
 import '../theme/palette_helper.dart';
@@ -105,8 +106,8 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
 
   void _startQueueRefreshTimer() {
     _stopQueueRefreshTimer();
-    // Refresh queue every 5 seconds when panel is open
-    _queueRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // Refresh queue at configured interval when panel is open
+    _queueRefreshTimer = Timer.periodic(Timings.playerPollingInterval, (_) {
       if (mounted && isQueuePanelOpen) {
         _loadQueue();
       }
@@ -139,7 +140,8 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
 
   void _startProgressTimer() {
     _progressTimer?.cancel();
-    _progressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Use local player report interval for progress updates (1 second)
+    _progressTimer = Timer.periodic(Timings.localPlayerReportInterval, (_) {
       if (mounted && isExpanded) {
         setState(() {});
       }

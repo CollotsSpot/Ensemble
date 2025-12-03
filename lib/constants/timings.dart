@@ -26,3 +26,20 @@ class Timings {
   /// Delay after track change before updating state
   static const Duration trackChangeDelay = Duration(milliseconds: 500);
 }
+
+/// Library and pagination constants
+class LibraryConstants {
+  LibraryConstants._();
+
+  /// Default page size for library items
+  static const int defaultPageSize = 100;
+
+  /// Maximum items to load for "all" library requests
+  static const int maxLibraryItems = 5000;
+
+  /// Number of items per batch for recent albums
+  static const int recentAlbumsBatchSize = 5;
+
+  /// Default limit for recent/random items
+  static const int defaultRecentLimit = 10;
+}

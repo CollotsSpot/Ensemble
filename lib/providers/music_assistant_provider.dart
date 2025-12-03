@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
-import '../constants/timings.dart';
+import '../constants/timings.dart' show Timings, LibraryConstants;
 import '../models/media_item.dart';
 import '../models/player.dart';
 import '../services/music_assistant_api.dart';
@@ -644,11 +644,11 @@ class MusicAssistantProvider with ChangeNotifier {
       notifyListeners();
 
       // Load artists, albums, and tracks in parallel
-      // Use a high limit to fetch "all" items (assuming library < 5000 items per type)
+      // Use configured max limit to fetch "all" items
       final results = await Future.wait([
-        _api!.getArtists(limit: 5000),
-        _api!.getAlbums(limit: 5000),
-        _api!.getTracks(limit: 5000),
+        _api!.getArtists(limit: LibraryConstants.maxLibraryItems),
+        _api!.getAlbums(limit: LibraryConstants.maxLibraryItems),
+        _api!.getTracks(limit: LibraryConstants.maxLibraryItems),
       ]);
 
       _artists = results[0] as List<Artist>;
@@ -674,7 +674,7 @@ class MusicAssistantProvider with ChangeNotifier {
       notifyListeners();
 
       _artists = await _api!.getArtists(
-        limit: limit ?? 5000, // Default to high limit if not specified
+        limit: limit ?? LibraryConstants.maxLibraryItems, // Default to high limit if not specified
         offset: offset,
         search: search,
       );
@@ -703,7 +703,7 @@ class MusicAssistantProvider with ChangeNotifier {
       notifyListeners();
 
       _albums = await _api!.getAlbums(
-        limit: limit ?? 5000, // Default to high limit
+        limit: limit ?? LibraryConstants.maxLibraryItems, // Default to high limit
         offset: offset,
         search: search,
         artistId: artistId,

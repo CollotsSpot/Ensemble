@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/timings.dart';
 import '../providers/music_assistant_provider.dart';
 import 'global_player_overlay.dart'; // For isPlayerExpanded and collapsePlayer
 
@@ -108,8 +109,8 @@ class _PlayerSelectorSheetState extends State<_PlayerSelectorSheet> {
   @override
   void initState() {
     super.initState();
-    // Auto-refresh every 2 seconds
-    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    // Auto-refresh at configured polling interval
+    _refreshTimer = Timer.periodic(Timings.playerPollingInterval, (_) {
       if (mounted) {
         context.read<MusicAssistantProvider>().refreshPlayers();
       }
