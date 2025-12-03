@@ -447,8 +447,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   IconData _getStatusIcon(MAConnectionState state) {
     switch (state) {
       case MAConnectionState.connected:
+      case MAConnectionState.authenticated:
         return Icons.check_circle_rounded;
       case MAConnectionState.connecting:
+      case MAConnectionState.authenticating:
         return Icons.sync_rounded;
       case MAConnectionState.error:
         return Icons.error_rounded;
@@ -460,8 +462,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Color _getStatusColor(MAConnectionState state, ColorScheme colorScheme) {
     switch (state) {
       case MAConnectionState.connected:
+      case MAConnectionState.authenticated:
         return Colors.green;
       case MAConnectionState.connecting:
+      case MAConnectionState.authenticating:
         return Colors.orange;
       case MAConnectionState.error:
         return colorScheme.error;
@@ -474,8 +478,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     switch (state) {
       case MAConnectionState.connected:
         return 'Connected';
+      case MAConnectionState.authenticated:
+        return 'Authenticated';
       case MAConnectionState.connecting:
         return 'Connecting...';
+      case MAConnectionState.authenticating:
+        return 'Authenticating...';
       case MAConnectionState.error:
         return 'Connection Error';
       case MAConnectionState.disconnected:

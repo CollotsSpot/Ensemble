@@ -346,15 +346,15 @@ class _LoginScreenState extends State<LoginScreen> {
         final storedToken = await SettingsService.getMaAuthToken();
         bool authSuccess = false;
 
-        if (storedToken != null) {
+        if (storedToken != null && provider.api != null) {
           _addDebugLog('Trying stored MA token...');
-          authSuccess = await provider.api.authenticateWithToken(storedToken);
+          authSuccess = await provider.api!.authenticateWithToken(storedToken);
         }
 
         if (!authSuccess) {
           _addDebugLog('Logging in with credentials...');
           // Login with credentials over WebSocket
-          final accessToken = await provider.api.loginWithCredentials(username, password);
+          final accessToken = await provider.api?.loginWithCredentials(username, password);
 
           if (accessToken == null) {
             setState(() {
@@ -365,7 +365,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
 
           // Try to create a long-lived token for future use
-          final longLivedToken = await provider.api.createLongLivedToken();
+          final longLivedToken = await provider.api?.createLongLivedToken();
           final tokenToStore = longLivedToken ?? accessToken;
 
           // Save the token for future auto-login
