@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import '../constants/timings.dart';
 import '../models/media_item.dart';
 import '../models/player.dart';
 import '../services/music_assistant_api.dart';
@@ -46,7 +47,6 @@ class MusicAssistantProvider with ChangeNotifier {
 
   // Player list caching
   DateTime? _playersLastFetched;
-  static const Duration _playersCacheDuration = Duration(minutes: 5);
 
   MAConnectionState get connectionState => _connectionState;
   String? get serverUrl => _serverUrl;
@@ -261,9 +261,13 @@ class MusicAssistantProvider with ChangeNotifier {
   
   void _startReportingLocalPlayerState() {
     _localPlayerStateReportTimer?.cancel();
-    // Report state every second (for smooth seek bar)
-    _localPlayerStateReportTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
-      await _reportLocalPlayerState();
+    // Report state at configured interval (for smooth seek bar)
+    _localPlayerStateReportTimer = Timer.periodic(Timings.localPlayerReportInterval, (_) async {
+      try {
+        await _reportLocalPlayerState();
+      } catch (e) {
+        _logger.log('Error reporting local player state (will retry): $e');
+      }
     });
   }
   
@@ -306,11 +310,12 @@ class MusicAssistantProvider with ChangeNotifier {
       _api = MusicAssistantAPI(serverUrl, _authManager);
 
       // Listen to connection state changes
-      _api!.connectionState.listen((state) async {
-        _connectionState = state;
-        notifyListeners();
+      _api!.connectionState.listen(
+        (state) async {
+          _connectionState = state;
+          notifyListeners();
 
-        if (state == MAConnectionState.connected) {
+          if (state == MAConnectionState.connected) {
           _logger.log('🔗 WebSocket connected to MA server');
 
           // STEP 1: Try to adopt an existing ghost player (fresh install only)
@@ -333,15 +338,31 @@ class MusicAssistantProvider with ChangeNotifier {
           _availablePlayers = [];
           _selectedPlayer = null;
         }
-      });
+        },
+        onError: (error) {
+          _logger.log('Connection state stream error: $error');
+          _connectionState = MAConnectionState.error;
+          notifyListeners();
+        },
+      );
       
       // Listen to built-in player events
       _localPlayerEventSubscription?.cancel();
-      _localPlayerEventSubscription = _api!.builtinPlayerEvents.listen(_handleLocalPlayerEvent);
+      _localPlayerEventSubscription = _api!.builtinPlayerEvents.listen(
+        _handleLocalPlayerEvent,
+        onError: (error) {
+          _logger.log('Builtin player event stream error: $error');
+        },
+      );
 
       // Listen to player_updated events to capture track metadata for notifications
       _playerUpdatedEventSubscription?.cancel();
-      _playerUpdatedEventSubscription = _api!.playerUpdatedEvents.listen(_handlePlayerUpdatedEvent);
+      _playerUpdatedEventSubscription = _api!.playerUpdatedEvents.listen(
+        _handlePlayerUpdatedEvent,
+        onError: (error) {
+          _logger.log('Player updated event stream error: $error');
+        },
+      );
 
       await _api!.connect();
       notifyListeners();
@@ -972,7 +993,7 @@ class MusicAssistantProvider with ChangeNotifier {
       if (!forceRefresh &&
           _playersLastFetched != null &&
           _availablePlayers.isNotEmpty &&
-          now.difference(_playersLastFetched!) < _playersCacheDuration) {
+          now.difference(_playersLastFetched!) < Timings.playersCacheDuration) {
         return;
       }
 
@@ -1100,9 +1121,13 @@ class MusicAssistantProvider with ChangeNotifier {
 
     if (_selectedPlayer == null) return;
 
-    // Poll every 5 seconds for better performance
-    _playerStateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _updatePlayerState();
+    // Poll at configured interval for better performance
+    _playerStateTimer = Timer.periodic(Timings.playerPollingInterval, (_) async {
+      try {
+        await _updatePlayerState();
+      } catch (e) {
+        _logger.log('Error updating player state (will retry): $e');
+      }
     });
 
     // Also update immediately
@@ -1211,14 +1236,14 @@ class MusicAssistantProvider with ChangeNotifier {
   Future<void> nextTrackSelectedPlayer() async {
     if (_selectedPlayer == null) return;
     await nextTrack(_selectedPlayer!.playerId);
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(Timings.trackChangeDelay);
     await _updatePlayerState();
   }
 
   Future<void> previousTrackSelectedPlayer() async {
     if (_selectedPlayer == null) return;
     await previousTrack(_selectedPlayer!.playerId);
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(Timings.trackChangeDelay);
     await _updatePlayerState();
   }
 

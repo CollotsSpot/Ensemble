@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:uuid/uuid.dart';
+import '../constants/network.dart';
+import '../constants/timings.dart';
 import '../models/media_item.dart';
 import '../models/player.dart';
 import 'debug_logger.dart';
@@ -121,15 +123,15 @@ class MusicAssistantAPI {
       } else {
         // No port specified
         if (!useSecure) {
-          // For WS (unsecure WebSocket), add Music Assistant default port 8095
+          // For WS (unsecure WebSocket), add Music Assistant default port
           finalUri = Uri(
             scheme: uri.scheme,
             host: uri.host,
-            port: 8095,
+            port: NetworkConstants.defaultWsPort,
             path: '/ws',
             queryParameters: {'client_id': clientId},
           );
-          _logger.log('Using port 8095 for unsecure connection');
+          _logger.log('Using port ${NetworkConstants.defaultWsPort} for unsecure connection');
         } else {
           // For WSS (secure WebSocket), DON'T specify port - use implicit default
           // This is critical for Cloudflare WebSocket support
@@ -186,7 +188,7 @@ class MusicAssistantAPI {
 
       // Wait for server info message with timeout
       await _connectionCompleter!.future.timeout(
-        const Duration(seconds: 10),
+        Timings.connectionTimeout,
         onTimeout: () {
           throw Exception('Connection timeout - no server info received');
         },
@@ -282,14 +284,17 @@ class MusicAssistantAPI {
 
     _channel!.sink.add(jsonEncode(message));
 
-    // Timeout after 30 seconds
-    return completer.future.timeout(
-      const Duration(seconds: 30),
-      onTimeout: () {
-        _pendingRequests.remove(messageId);
-        throw TimeoutException('Command timeout: $command');
-      },
-    );
+    // Timeout after configured duration, ensure cleanup in all cases
+    try {
+      return await completer.future.timeout(
+        Timings.commandTimeout,
+        onTimeout: () {
+          throw TimeoutException('Command timeout: $command');
+        },
+      );
+    } finally {
+      _pendingRequests.remove(messageId);
+    }
   }
 
   // Library browsing methods
@@ -1759,7 +1764,7 @@ class MusicAssistantAPI {
   }
 
   Future<void> _reconnect() async {
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(Timings.reconnectDelay);
     if (_currentState != MAConnectionState.connected) {
       try {
         await connect();

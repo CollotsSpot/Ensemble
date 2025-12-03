@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/timings.dart';
 import '../providers/music_assistant_provider.dart';
 import '../models/media_item.dart';
 import '../services/debug_logger.dart';
@@ -58,7 +59,7 @@ class SearchScreenState extends State<SearchScreen> {
 
   void _onSearchChanged(String query) {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+    _debounceTimer = Timer(Timings.searchDebounce, () {
       _performSearch(query);
     });
   }
