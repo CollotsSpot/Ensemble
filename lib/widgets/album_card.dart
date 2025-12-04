@@ -4,6 +4,8 @@ import '../models/media_item.dart';
 import '../providers/music_assistant_provider.dart';
 import '../screens/album_details_screen.dart';
 import '../constants/hero_tags.dart';
+import '../theme/theme_provider.dart';
+import '../utils/page_transitions.dart';
 
 class AlbumCard extends StatelessWidget {
   final Album album;
@@ -29,10 +31,12 @@ class AlbumCard extends StatelessWidget {
     return RepaintBoundary(
       child: GestureDetector(
         onTap: onTap ?? () {
+          // Update adaptive colors immediately on tap
+          updateAdaptiveColorsFromImage(context, imageUrl);
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => AlbumDetailsScreen(
+            FadeSlidePageRoute(
+              child: AlbumDetailsScreen(
                 album: album,
                 heroTagSuffix: heroTagSuffix,
               ),

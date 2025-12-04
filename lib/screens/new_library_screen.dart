@@ -6,6 +6,7 @@ import '../widgets/player_selector.dart';
 import '../widgets/album_card.dart';
 import '../utils/page_transitions.dart';
 import '../constants/hero_tags.dart';
+import '../theme/theme_provider.dart';
 import 'artist_details_screen.dart';
 import 'playlist_details_screen.dart';
 import 'settings_screen.dart';
@@ -233,6 +234,8 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
         ),
       ),
       onTap: () {
+        // Update adaptive colors immediately on tap
+        updateAdaptiveColorsFromImage(context, imageUrl);
         Navigator.push(
           context,
           FadeSlidePageRoute(

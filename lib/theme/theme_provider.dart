@@ -1,6 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import 'palette_helper.dart';
+
+/// Global function to update adaptive colors from an image URL
+/// This can be called from anywhere in the app (e.g., when tapping an album/artist)
+Future<void> updateAdaptiveColorsFromImage(BuildContext context, String? imageUrl) async {
+  if (imageUrl == null || imageUrl.isEmpty) return;
+
+  try {
+    final colorSchemes = await PaletteHelper.extractColorSchemes(NetworkImage(imageUrl));
+    if (colorSchemes != null && context.mounted) {
+      final themeProvider = context.read<ThemeProvider>();
+      themeProvider.updateAdaptiveColors(colorSchemes.$1, colorSchemes.$2);
+    }
+  } catch (e) {
+    // Silently fail - colors will update when track plays
+    print('Failed to extract colors on tap: $e');
+  }
+}
 
 class ThemeProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;

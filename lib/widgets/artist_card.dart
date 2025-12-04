@@ -4,6 +4,8 @@ import '../models/media_item.dart';
 import '../providers/music_assistant_provider.dart';
 import '../screens/artist_details_screen.dart';
 import '../constants/hero_tags.dart';
+import '../theme/theme_provider.dart';
+import '../utils/page_transitions.dart';
 
 class ArtistCard extends StatelessWidget {
   final Artist artist;
@@ -29,10 +31,12 @@ class ArtistCard extends StatelessWidget {
     return RepaintBoundary(
       child: GestureDetector(
         onTap: onTap ?? () {
+          // Update adaptive colors immediately on tap
+          updateAdaptiveColorsFromImage(context, imageUrl);
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => ArtistDetailsScreen(
+            FadeSlidePageRoute(
+              child: ArtistDetailsScreen(
                 artist: artist,
                 heroTagSuffix: heroTagSuffix,
               ),

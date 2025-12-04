@@ -8,6 +8,7 @@ import '../theme/palette_helper.dart';
 import '../theme/theme_provider.dart';
 import '../services/metadata_service.dart';
 import '../services/debug_logger.dart';
+import '../utils/page_transitions.dart';
 
 class ArtistDetailsScreen extends StatefulWidget {
   final Artist artist;
@@ -351,10 +352,12 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
 
     return InkWell(
       onTap: () {
+        // Update adaptive colors immediately on tap
+        updateAdaptiveColorsFromImage(context, imageUrl);
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => AlbumDetailsScreen(
+          FadeSlidePageRoute(
+            child: AlbumDetailsScreen(
               album: album,
               heroTagSuffix: heroSuffix,
             ),
