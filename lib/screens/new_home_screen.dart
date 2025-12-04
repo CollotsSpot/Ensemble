@@ -159,7 +159,7 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
         key: _refreshKey,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
           // Recently played albums (extracted from recently played tracks)
           AlbumRow(
@@ -169,7 +169,7 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
               return await provider.api!.getRecentAlbums(limit: 10);
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 6),
 
           // Discover Artists
           ArtistRow(
@@ -179,7 +179,7 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
               return await provider.api!.getRandomArtists(limit: 10);
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 6),
 
           // Discover Albums
           AlbumRow(
