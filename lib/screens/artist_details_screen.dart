@@ -335,7 +335,7 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
                   ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 140)), // Extra space for mini player + bottom nav
+              const SliverToBoxAdapter(child: SizedBox(height: 80)), // Extra space for mini player
             ],
           ],
         ],
