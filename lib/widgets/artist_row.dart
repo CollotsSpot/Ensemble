@@ -22,6 +22,7 @@ class ArtistRow extends StatefulWidget {
 
 class _ArtistRowState extends State<ArtistRow> with AutomaticKeepAliveClientMixin {
   late Future<List<Artist>> _artistsFuture;
+  List<Artist>? _cachedArtists; // Keep last loaded data to prevent flash
   bool _hasLoaded = false;
 
   @override
@@ -35,7 +36,10 @@ class _ArtistRowState extends State<ArtistRow> with AutomaticKeepAliveClientMixi
 
   void _loadArtistsOnce() {
     if (!_hasLoaded) {
-      _artistsFuture = widget.loadArtists();
+      _artistsFuture = widget.loadArtists().then((artists) {
+        _cachedArtists = artists;
+        return artists;
+      });
       _hasLoaded = true;
     }
   }
@@ -64,18 +68,21 @@ class _ArtistRowState extends State<ArtistRow> with AutomaticKeepAliveClientMixi
           child: FutureBuilder<List<Artist>>(
             future: _artistsFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              // Use cached data immediately if available (prevents flash on rebuild)
+              final artists = snapshot.data ?? _cachedArtists;
+
+              // Only show loading if we have no data at all
+              if (artists == null && snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (snapshot.hasError) {
+              if (snapshot.hasError && artists == null) {
                 return Center(
                   child: Text('Error: ${snapshot.error}'),
                 );
               }
 
-              final artists = snapshot.data ?? [];
-              if (artists.isEmpty) {
+              if (artists == null || artists.isEmpty) {
                 return Center(
                   child: Text(
                     'No artists found',
