@@ -16,7 +16,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _serverUrlController = TextEditingController();
   final TextEditingController _ownerNameController = TextEditingController();
-  final TextEditingController _portController = TextEditingController(text: '8095');
+  final TextEditingController _portController = TextEditingController();
   final TextEditingController _authServerUrlController = TextEditingController(); // For separate auth server (Authelia)
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -252,22 +252,17 @@ class _LoginScreenState extends State<LoginScreen> {
       final serverUrl = _buildServerUrl();
       final port = _portController.text.trim();
 
-      // Validate port
-      if (port.isEmpty) {
-        setState(() {
-          _error = 'Please enter a port number';
-          _isConnecting = false;
-        });
-        return;
-      }
-
-      final portNum = int.tryParse(port);
-      if (portNum == null || portNum < 1 || portNum > 65535) {
-        setState(() {
-          _error = 'Please enter a valid port number (1-65535)';
-          _isConnecting = false;
-        });
-        return;
+      // Validate port (if provided)
+      int? portNum;
+      if (port.isNotEmpty) {
+        portNum = int.tryParse(port);
+        if (portNum == null || portNum < 1 || portNum > 65535) {
+          setState(() {
+            _error = 'Please enter a valid port number (1-65535)';
+            _isConnecting = false;
+          });
+          return;
+        }
       }
 
       // Save owner name (if provided) and port to settings
@@ -539,10 +534,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Port
               Text(
-                'Port',
+                'Port (Optional)',
                 style: textTheme.titleMedium?.copyWith(
                   color: colorScheme.onBackground,
                   fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Leave blank for reverse proxy or standard ports. Enter 8095 for direct connection.',
+                style: TextStyle(
+                  color: colorScheme.onBackground.withOpacity(0.6),
+                  fontSize: 12,
                 ),
               ),
               const SizedBox(height: 12),
@@ -551,7 +554,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _portController,
                 style: TextStyle(color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  hintText: '8095',
+                  hintText: 'e.g., 8095 or leave blank',
                   hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
                   filled: true,
                   fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
