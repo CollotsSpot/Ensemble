@@ -20,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _authServerUrlController = TextEditingController(); // For separate auth server (Authelia)
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _usernameFocusNode = FocusNode();
 
   bool _isConnecting = false;
   bool _isDetectingAuth = false;
@@ -67,6 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _authServerUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _usernameFocusNode.dispose();
     super.dispose();
   }
 
@@ -176,6 +178,14 @@ class _LoginScreenState extends State<LoginScreen> {
       // If no auth required, connect immediately
       if (strategy.name == 'none') {
         await _connect();
+      } else {
+        // Auth required - focus username field after a brief delay
+        // to allow the new fields to build
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            _usernameFocusNode.requestFocus();
+          }
+        });
       }
     } catch (e) {
       setState(() {
@@ -572,11 +582,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? colorScheme.primaryContainer.withOpacity(0.3)
                         : colorScheme.tertiaryContainer.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: needsAuth
-                          ? colorScheme.primary.withOpacity(0.3)
-                          : colorScheme.tertiary.withOpacity(0.3),
-                    ),
                   ),
                   child: Row(
                     children: [
@@ -674,6 +679,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 TextField(
                   controller: _usernameController,
+                  focusNode: _usernameFocusNode,
                   style: TextStyle(color: colorScheme.onSurface),
                   decoration: InputDecoration(
                     hintText: 'Username',
