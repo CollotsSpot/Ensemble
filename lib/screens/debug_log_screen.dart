@@ -5,7 +5,6 @@ import '../services/debug_logger.dart';
 import '../providers/music_assistant_provider.dart';
 import '../models/player.dart';
 import '../widgets/global_player_overlay.dart';
-import 'ghost_player_cleanup_screen.dart';
 
 class DebugLogScreen extends StatefulWidget {
   const DebugLogScreen({super.key});
@@ -222,33 +221,12 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
             icon: const Icon(Icons.more_vert, color: Colors.white),
             tooltip: 'Player tools',
             onSelected: (value) async {
-              final maProvider = context.read<MusicAssistantProvider>();
               switch (value) {
                 case 'show_players':
                   _showAllPlayers();
                   break;
-                case 'cleanup_ghosts':
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const GhostPlayerCleanupScreen(),
-                    ),
-                  );
-                  break;
-                case 'repair_corrupt':
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Repairing corrupt players...')),
-                  );
-                  final (repaired, failedRepair) = await maProvider.repairCorruptPlayers();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Repaired $repaired, $failedRepair failed'),
-                        backgroundColor: failedRepair > 0 ? Colors.orange : Colors.green,
-                      ),
-                    );
-                  }
-                  break;
+                // NOTE: Ghost cleanup and repair options removed - MA APIs don't work
+                // reliably and caused corrupt entries. See PLAYER_LIFECYCLE_GUIDE.md
               }
             },
             itemBuilder: (context) => [
@@ -257,22 +235,6 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
                 child: ListTile(
                   leading: Icon(Icons.speaker_group_rounded),
                   title: Text('View All Players'),
-                  dense: true,
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'cleanup_ghosts',
-                child: ListTile(
-                  leading: Icon(Icons.cleaning_services_rounded),
-                  title: Text('Clean Up Ghosts'),
-                  dense: true,
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'repair_corrupt',
-                child: ListTile(
-                  leading: Icon(Icons.build_rounded),
-                  title: Text('Repair Corrupt'),
                   dense: true,
                 ),
               ),

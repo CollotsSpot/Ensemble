@@ -212,63 +212,88 @@ Based on research findings, this is the EXACT sequence Ensemble follows:
 
 ### Manual Cleanup Method (ONLY RELIABLE WAY)
 
+> **CRITICAL FOR CLAUDE:** The procedure below MUST be followed EXACTLY. MA keeps player
+> data in memory and writes it back to settings.json on shutdown. If you edit settings.json
+> while MA is running or use `docker restart`, MA will overwrite your changes with the
+> corrupted data from memory. YOU MUST STOP THE CONTAINER FIRST.
+
 **Prerequisites:**
 - SSH/terminal access to MA server
 - Docker or direct filesystem access
-- Backup of settings.json
 
-**Steps:**
+**EXACT STEPS (DO NOT DEVIATE):**
 
 ```bash
-# 1. Backup first!
+# STEP 1: STOP the container (NOT restart!)
+docker stop musicassistant
+
+# STEP 2: Backup settings.json
 cp /home/home-server/docker/music-assistant/data/settings.json \
-   /home/home-server/docker/music-assistant/data/settings.json.backup
+   /home/home-server/docker/music-assistant/data/settings.json.backup.$(date +%Y%m%d_%H%M%S)
 
-# 2. Identify ghost players
+# STEP 3: Check for corrupted entries (missing 'provider' field)
 cat /home/home-server/docker/music-assistant/data/settings.json | \
-  jq '.players | to_entries[] | select(.value.provider == "builtin_player") | .key'
-
-# Output example:
-# "ensemble_4be5077a-2a21-42c3-9d06-2eaf48ae8ca7"  <- Kat's Phone (keep)
-# "ensemble_6896c1f6-c735-4158-a0bb-74f12f81384e"  <- Ghost (remove)
-# "ensemble_8556a5a6-7e4c-4b24-8c4e-5d3c9f8e2d1a"  <- Ghost (remove)
-
-# 3. Remove specific ghost
-cat settings.json | \
-  jq 'del(.players["ensemble_6896c1f6-c735-4158-a0bb-74f12f81384e"])' > settings_fixed.json
-mv settings_fixed.json settings.json
-
-# 4. OR remove ALL unavailable players
-cat settings.json | \
-  jq '.players |= with_entries(select(.value.available == true or .value.available == null))' \
-  > settings_fixed.json
-mv settings_fixed.json settings.json
-
-# 5. Restart MA
-docker restart musicassistant
-
-# 6. Verify
-curl -s http://your-ma-server:8095/ -o /dev/null -w "%{http_code}"
-# Should return 200
-```
-
-### Detecting Corrupt Configs
-
-Corrupt players (missing required fields) can crash MA on startup.
-
-**Check for corruption:**
-```bash
-cat settings.json | \
   jq '.players | to_entries[] | select(.value | has("provider") | not) | .key'
+
+# STEP 4: Remove ALL corrupted entries (missing provider field)
+cat /home/home-server/docker/music-assistant/data/settings.json | \
+  jq '.players |= with_entries(select(.value | has("provider")))' \
+  > /tmp/settings_fixed.json && \
+  mv /tmp/settings_fixed.json /home/home-server/docker/music-assistant/data/settings.json
+
+# STEP 5: Verify the fix worked
+cat /home/home-server/docker/music-assistant/data/settings.json | \
+  jq '.players | to_entries[] | select(.value | has("provider") | not) | .key'
+# Should output NOTHING
+
+# STEP 6: Show remaining valid players
+cat /home/home-server/docker/music-assistant/data/settings.json | jq '.players | keys'
+
+# STEP 7: START the container (not restart)
+docker start musicassistant
+
+# STEP 8: Wait for startup and verify no errors
+sleep 10
+docker logs musicassistant 2>&1 | tail -20 | grep -i "error\|KeyError"
+# Should show no KeyError: 'provider' errors
 ```
 
-**Fix corruption:**
+**WHY THIS WORKS:**
+- `docker stop` allows MA to write its current state, then container exits
+- Editing while stopped means MA can't overwrite our changes
+- `docker start` loads the clean settings.json fresh
+
+**WHY `docker restart` FAILS:**
+- MA writes corrupted memory state to disk during restart
+- Your edits get overwritten before MA reads the file again
+
+### Removing Specific Players (Optional)
+
+If you need to remove specific player IDs rather than all corrupted ones:
+
 ```bash
-cat settings.json | \
-  jq '.players |= with_entries(select(.value | has("provider")))' > settings_fixed.json
-mv settings_fixed.json settings.json
-docker restart musicassistant
+# Stop container first!
+docker stop musicassistant
+
+# Remove specific player by ID
+cat /home/home-server/docker/music-assistant/data/settings.json | \
+  jq 'del(.players["ensemble_SPECIFIC-UUID-HERE"])' \
+  > /tmp/settings_fixed.json && \
+  mv /tmp/settings_fixed.json /home/home-server/docker/music-assistant/data/settings.json
+
+docker start musicassistant
 ```
+
+### Identifying Ghost vs Valid Players
+
+```bash
+# List all builtin players with their status
+cat /home/home-server/docker/music-assistant/data/settings.json | \
+  jq '.players | to_entries[] | select(.value.provider == "builtin_player") | {id: .key, name: .value.default_name, available: .value.available, has_all_fields: ((.value | has("provider")) and (.value | has("player_id")) and (.value | has("enabled")))}'
+```
+
+**Valid entry has:** `provider`, `player_id`, `enabled`, `available`, `values`, `default_name`
+**Corrupted entry has:** Only `default_name` (missing everything else)
 
 ### Ghost Adoption (Preventing New Ghosts on Reinstall)
 

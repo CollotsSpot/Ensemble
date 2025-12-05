@@ -422,12 +422,6 @@ class MusicAssistantProvider with ChangeNotifier {
     return await SettingsService.getBuiltinPlayerId();
   }
 
-  // Repair corrupt player configs
-  Future<(int, int)> repairCorruptPlayers() async {
-    if (_api == null) return (0, 0);
-    return await _api!.repairCorruptPlayers();
-  }
-
   // API access
   MusicAssistantAPI? get api => _api;
 
@@ -584,10 +578,10 @@ class MusicAssistantProvider with ChangeNotifier {
       // DeviceIdService will use adopted ID if available, or generate new
       await _registerLocalPlayer();
 
-      // STEP 5: Clean up remaining ghost players (after registration)
-      await _cleanupGhostPlayers();
+      // NOTE: Ghost player cleanup removed - the MA APIs don't work reliably
+      // and actually caused corrupt player entries. See PLAYER_LIFECYCLE_GUIDE.md
 
-      // STEP 6: Load available players and auto-select local player
+      // STEP 5: Load available players and auto-select local player
       await _loadAndSelectPlayers();
 
       // STEP 7: Auto-load library when connected
@@ -617,19 +611,6 @@ class MusicAssistantProvider with ChangeNotifier {
 
     if (isConnected) {
       await _registerLocalPlayer();
-    }
-  }
-
-  Future<void> _cleanupGhostPlayers() async {
-    if (_api == null) return;
-
-    try {
-      final (removed, _) = await _api!.cleanupGhostPlayers();
-      if (removed > 0) {
-        _logger.log('🧹 Auto-cleanup removed $removed ghost player(s)');
-      }
-    } catch (e) {
-      _logger.log('⚠️ Ghost player cleanup failed (non-fatal): $e');
     }
   }
 
@@ -676,38 +657,9 @@ class MusicAssistantProvider with ChangeNotifier {
     }
   }
 
-  /// Manually purge all unavailable players (user-triggered from settings)
-  /// Returns a tuple of (removedCount, failedCount)
-  Future<(int, int)> purgeUnavailablePlayers() async {
-    if (_api == null) return (0, 0);
-
-    try {
-      _logger.log('🧹 User-triggered purge of unavailable players...');
-
-      final result = await _api!.cleanupGhostPlayers(allUnavailable: true);
-
-      // Force refresh players list after purge
-      await _loadAndSelectPlayers(forceRefresh: true);
-
-      return result;
-    } catch (e) {
-      _logger.log('❌ Purge failed: $e');
-      rethrow;
-    }
-  }
-
-  /// Get count of unavailable players (for UI display)
-  Future<int> getUnavailablePlayersCount() async {
-    if (_api == null) return 0;
-
-    try {
-      final allPlayers = await _api!.getPlayers();
-      return allPlayers.where((p) => !p.available).length;
-    } catch (e) {
-      _logger.log('Error getting unavailable players count: $e');
-      return 0;
-    }
-  }
+  // NOTE: purgeUnavailablePlayers and getUnavailablePlayersCount removed.
+  // The MA APIs for player removal don't work reliably and caused corrupt entries.
+  // Ghost cleanup must be done manually - see PLAYER_LIFECYCLE_GUIDE.md
 
   Future<void> _registerLocalPlayer() async {
     if (_api == null) return;
