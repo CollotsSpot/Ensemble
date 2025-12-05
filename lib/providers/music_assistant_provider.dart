@@ -68,6 +68,10 @@ class MusicAssistantProvider with ChangeNotifier {
   final Map<String, Map<String, List<MediaItem>>> _searchCache = {};
   final Map<String, DateTime> _searchCacheTime = {};
 
+  // Registration guard to prevent concurrent registration attempts
+  // This implements the pattern from research: prevent ghost creation during rapid reconnects
+  Completer<void>? _registrationInProgress;
+
   MAConnectionState get connectionState => _connectionState;
   String? get serverUrl => _serverUrl;
   List<Artist> get artists => _artists;
@@ -708,6 +712,15 @@ class MusicAssistantProvider with ChangeNotifier {
   Future<void> _registerLocalPlayer() async {
     if (_api == null) return;
 
+    // Guard against concurrent registration attempts
+    // This prevents ghost creation during rapid connect/disconnect cycles
+    if (_registrationInProgress != null) {
+      _logger.log('⏳ Registration already in progress, waiting...');
+      return _registrationInProgress!.future;
+    }
+
+    _registrationInProgress = Completer<void>();
+
     try {
       // Get or generate player ID
       // DeviceIdService handles the lazy generation pattern
@@ -719,14 +732,40 @@ class MusicAssistantProvider with ChangeNotifier {
 
       final name = await SettingsService.getLocalPlayerName();
 
+      // CRITICAL: Check if player already exists before re-registering
+      // This implements the pattern from research: "check for existing player on reconnect"
+      final existingPlayers = await _api!.getPlayers();
+      final existingPlayer = existingPlayers.where((p) => p.playerId == playerId).firstOrNull;
+
+      if (existingPlayer != null && existingPlayer.available) {
+        // Player already exists and is available - just resume state updates
+        _logger.log('✅ Player already registered and available: $playerId');
+        _logger.log('   No re-registration needed, resuming state updates');
+        _startReportingLocalPlayerState();
+        _registrationInProgress?.complete();
+        _registrationInProgress = null;
+        return;
+      } else if (existingPlayer != null && !existingPlayer.available) {
+        // Player exists but is unavailable (stale) - re-register to revive it
+        _logger.log('⚠️ Player exists but unavailable (stale), re-registering: $playerId');
+      } else {
+        // Player doesn't exist - normal registration
+        _logger.log('🆔 Player not found in MA, registering as new');
+      }
+
       // Register with MA server
       _logger.log('🎵 Registering player with MA: id=$playerId, name=$name');
       await _api!.registerBuiltinPlayer(playerId, name);
 
       _logger.log('✅ Player registration complete');
       _startReportingLocalPlayerState();
+
+      _registrationInProgress?.complete();
+      _registrationInProgress = null;
     } catch (e) {
       _logger.log('❌ CRITICAL: Player registration failed: $e');
+      _registrationInProgress?.completeError(e);
+      _registrationInProgress = null;
       // This is a critical error - without registration, the app won't work
       rethrow;
     }

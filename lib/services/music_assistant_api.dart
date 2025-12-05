@@ -1306,61 +1306,91 @@ class MusicAssistantAPI {
     return _eventStreams['player_updated']!.stream;
   }
 
-  /// Register this device as a player
+  /// Register this device as a player with retry logic
   /// CRITICAL: This creates a player config in MA's settings.json
   /// The server expects: player_id and player_name
   /// The server SHOULD set: provider=builtin_player, enabled=true, available=true
+  ///
+  /// Implements retry pattern from research: exponential backoff for reliability
   Future<void> registerBuiltinPlayer(String playerId, String name) async {
-    try {
-      _logger.log('🎵 Registering builtin player: id=$playerId, name=$name');
+    const maxRetries = 3;
+    int attempt = 0;
 
-      final response = await _sendCommand(
-        'builtin_player/register',
-        args: {
-          'player_id': playerId,
-          'player_name': name,  // Server expects 'player_name', not 'name'
-        },
-      );
-
-      _logger.log('✅ Builtin player registered successfully');
-      _logger.log('📊 Registration response: ${response['result']}');
-
-      // CRITICAL: Explicitly save the player config to ensure all fields are persisted
-      // This prevents the 999 error: "Field player_id of type str is missing in PlayerConfig"
-      // The builtin_player/register creates the player but may not fully persist the config
+    while (attempt < maxRetries) {
       try {
-        _logger.log('💾 Saving player config to ensure persistence...');
-        await _sendCommand(
-          'config/players/save',
+        attempt++;
+        if (attempt > 1) {
+          final delay = Duration(milliseconds: 500 * (1 << (attempt - 2))); // 500ms, 1s, 2s
+          _logger.log('🔄 Retry attempt $attempt/$maxRetries after ${delay.inMilliseconds}ms...');
+          await Future.delayed(delay);
+        }
+
+        _logger.log('🎵 Registering builtin player: id=$playerId, name=$name (attempt $attempt/$maxRetries)');
+
+        final response = await _sendCommand(
+          'builtin_player/register',
           args: {
             'player_id': playerId,
-            'values': <String, dynamic>{}, // Empty values dict - just ensure config is saved
+            'player_name': name,  // Server expects 'player_name', not 'name'
           },
         );
-        _logger.log('✅ Player config saved successfully');
+
+        _logger.log('✅ Builtin player registered successfully');
+        _logger.log('📊 Registration response: ${response['result']}');
+
+        // CRITICAL: Explicitly save the player config to ensure all fields are persisted
+        // This prevents the 999 error: "Field player_id of type str is missing in PlayerConfig"
+        // The builtin_player/register creates the player but may not fully persist the config
+        // Wait a bit for registration to complete before saving
+        await Future.delayed(const Duration(milliseconds: 300));
+
+        try {
+          _logger.log('💾 Saving player config to ensure persistence...');
+          await _sendCommand(
+            'config/players/save',
+            args: {
+              'player_id': playerId,
+              'values': <String, dynamic>{}, // Empty values dict - just ensure config is saved
+            },
+          );
+          _logger.log('✅ Player config saved successfully');
+        } catch (e) {
+          // config/players/save may fail if player doesn't have a config yet
+          // This is non-fatal, the registration may still work
+          _logger.log('⚠️ Could not save player config (may already be saved): $e');
+        }
+
+        // VERIFICATION: Check that the player was actually created properly
+        // Wait a moment for server to process, then verify
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        final players = await getPlayers();
+        final registeredPlayer = players.where((p) => p.playerId == playerId).firstOrNull;
+
+        if (registeredPlayer == null) {
+          _logger.log('⚠️ WARNING: Player was registered but not found in player list');
+          // This is concerning but not fatal - player might appear later
+        } else if (!registeredPlayer.available) {
+          _logger.log('⚠️ WARNING: Player registered but marked as unavailable');
+          // This could indicate a timing issue - consider retrying
+          if (attempt < maxRetries) {
+            throw Exception('Player registered but unavailable - will retry');
+          }
+        } else {
+          _logger.log('✅ Verification passed: Player is available in MA');
+        }
+
+        // Success - exit retry loop
+        return;
       } catch (e) {
-        // config/players/save may fail if player doesn't have a config yet
-        // This is non-fatal, the registration may still work
-        _logger.log('⚠️ Could not save player config (may already be saved): $e');
+        _logger.log('❌ Registration attempt $attempt failed: $e');
+
+        if (attempt >= maxRetries) {
+          _logger.log('❌ All $maxRetries registration attempts failed');
+          rethrow; // Final failure - propagate up
+        }
+        // Otherwise, continue to next retry
       }
-
-      // VERIFICATION: Check that the player was actually created properly
-      // Wait a moment for server to process, then verify
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      final players = await getPlayers();
-      final registeredPlayer = players.where((p) => p.playerId == playerId).firstOrNull;
-
-      if (registeredPlayer == null) {
-        _logger.log('⚠️ WARNING: Player was registered but not found in player list');
-      } else if (!registeredPlayer.available) {
-        _logger.log('⚠️ WARNING: Player registered but marked as unavailable');
-      } else {
-        _logger.log('✅ Verification passed: Player is available in MA');
-      }
-    } catch (e) {
-      _logger.log('❌ Error registering built-in player: $e');
-      rethrow; // Rethrow to propagate the error up
     }
   }
 
