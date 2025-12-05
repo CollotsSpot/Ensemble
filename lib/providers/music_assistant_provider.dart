@@ -294,21 +294,27 @@ class MusicAssistantProvider with ChangeNotifier {
       final libraryAlbums = await _api!.getAlbums();
       final artistAlbums = libraryAlbums.where((album) {
         final albumArtists = album.artists;
-        if (albumArtists.isEmpty) return false;
+        if (albumArtists == null || albumArtists.isEmpty) return false;
         return albumArtists.any((a) =>
           a.name.toLowerCase() == artistName.toLowerCase());
       }).toList();
 
       // Also search provider for more albums
-      final searchResults = await _api!.search(artistName, mediaTypes: ['album'], limit: 20);
-      final providerAlbums = searchResults['albums'] as List<Album>? ?? [];
+      final searchResults = await _api!.search(artistName);
+      final searchAlbums = searchResults['albums'] as List<MediaItem>? ?? [];
+      final providerAlbums = searchAlbums.whereType<Album>().where((album) {
+        final albumArtists = album.artists;
+        if (albumArtists == null || albumArtists.isEmpty) return false;
+        return albumArtists.any((a) =>
+          a.name.toLowerCase() == artistName.toLowerCase());
+      }).toList();
 
       // Merge and deduplicate
       final allAlbums = <Album>[];
       final seenNames = <String>{};
 
       for (final album in [...artistAlbums, ...providerAlbums]) {
-        final key = '${album.name.toLowerCase()}_${album.year ?? 0}';
+        final key = album.name.toLowerCase();
         if (!seenNames.contains(key)) {
           seenNames.add(key);
           allAlbums.add(album);
@@ -362,12 +368,12 @@ class MusicAssistantProvider with ChangeNotifier {
 
     try {
       _logger.log('🔄 Searching for "$query"...');
-      final results = await _api!.search(query, limit: 25);
+      final results = await _api!.search(query);
 
       final cachedResults = <String, List<MediaItem>>{
-        'artists': results['artists'] as List<MediaItem>? ?? [],
-        'albums': results['albums'] as List<MediaItem>? ?? [],
-        'tracks': results['tracks'] as List<MediaItem>? ?? [],
+        'artists': results['artists'] ?? [],
+        'albums': results['albums'] ?? [],
+        'tracks': results['tracks'] ?? [],
       };
 
       _searchCache[cacheKey] = cachedResults;

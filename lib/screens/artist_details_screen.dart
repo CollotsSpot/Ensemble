@@ -92,18 +92,9 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
     final allAlbums = await provider.getArtistAlbumsWithCache(widget.artist.name);
 
     if (mounted) {
-      // Split into library albums (in provider's library) and provider-only albums
-      final libraryAlbums = allAlbums.where((album) =>
-        album.inLibrary == true
-      ).toList();
-
-      final providerAlbums = allAlbums.where((album) =>
-        album.inLibrary != true
-      ).toList();
-
       setState(() {
-        _albums = libraryAlbums.isNotEmpty ? libraryAlbums : allAlbums;
-        _providerAlbums = libraryAlbums.isNotEmpty ? providerAlbums : [];
+        _albums = allAlbums;
+        _providerAlbums = []; // All albums are merged in the cache method
         _isLoading = false;
       });
     }
