@@ -166,14 +166,14 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
             title: 'Recently Played',
             loadAlbums: () => provider.getRecentAlbumsWithCache(),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 21),
 
           // Discover Artists (with caching)
           ArtistRow(
             title: 'Discover Artists',
             loadArtists: () => provider.getDiscoverArtistsWithCache(),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
 
           // Discover Albums (with caching)
           AlbumRow(
