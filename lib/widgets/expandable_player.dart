@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/timings.dart';
 import '../providers/music_assistant_provider.dart';
 import '../models/player.dart';
+import '../services/debug_logger.dart';
 import '../theme/palette_helper.dart';
 import '../theme/theme_provider.dart';
 import 'animated_icon_button.dart';
@@ -215,7 +216,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
         themeProvider.updateAdaptiveColors(colorSchemes.$1, colorSchemes.$2);
       }
     } catch (e) {
-      print('Failed to extract colors: $e');
+      DebugLogger().log('Player: Failed to extract album colors');
     }
   }
 

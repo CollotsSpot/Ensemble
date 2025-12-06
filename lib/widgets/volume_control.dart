@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/music_assistant_provider.dart';
+import '../services/debug_logger.dart';
 
 /// Volume control widget for Music Assistant players
 class VolumeControl extends StatefulWidget {
@@ -13,6 +14,7 @@ class VolumeControl extends StatefulWidget {
 }
 
 class _VolumeControlState extends State<VolumeControl> {
+  final _logger = DebugLogger();
   double? _pendingVolume; // Track pending volume changes
 
   @override
@@ -90,37 +92,33 @@ class _VolumeControlState extends State<VolumeControl> {
               },
               onChangeEnd: (value) async {
                 final volumeLevel = (value * 100).round();
-                print('🔊 Volume slider released at $volumeLevel');
+                _logger.log('Volume: Setting to $volumeLevel%');
                 try {
                   // Unmute if changing volume while muted
                   if (isMuted) {
-                    print('🔇 Unmuting player before setting volume');
+                    _logger.log('Volume: Unmuting player first');
                     await maProvider.setMute(player.playerId, false);
                   }
-                  print('🔊 Calling setVolume with $volumeLevel');
                   await maProvider.setVolume(player.playerId, volumeLevel);
-                  print('✅ Volume set complete');
 
                   // Wait for the player state to update by polling
                   for (int i = 0; i < 10; i++) {
                     await Future.delayed(const Duration(milliseconds: 100));
                     if (mounted) {
                       final updatedPlayer = maProvider.selectedPlayer;
-                      print('🔊 Poll $i: player volume = ${updatedPlayer?.volume}, target = $volumeLevel');
                       if (updatedPlayer != null && (updatedPlayer.volume - volumeLevel).abs() <= 2) {
-                        print('✅ Volume updated on server');
+                        _logger.log('Volume: Updated to $volumeLevel%');
                         break;
                       }
                     }
                   }
                 } catch (e) {
-                  print('❌ Error setting volume: $e');
+                  _logger.log('Volume: Error - $e');
                 } finally {
                   if (mounted) {
                     setState(() {
                       _pendingVolume = null;
                     });
-                    print('🔊 Cleared pending volume');
                   }
                 }
               },

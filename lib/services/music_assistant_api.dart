@@ -169,9 +169,9 @@ class MusicAssistantAPI {
       final headers = authManager.getWebSocketHeaders();
 
       if (headers.isNotEmpty) {
-        _logger.log('🔑 Adding auth headers to WebSocket handshake: ${headers.keys.join(', ')}');
+        _logger.log('Connection: Using authentication');
       } else {
-        _logger.log('ℹ️ No authentication configured for WebSocket');
+        _logger.log('Connection: No authentication configured');
       }
 
       // Use WebSocket.connect with headers, then wrap in IOWebSocketChannel
@@ -208,11 +208,11 @@ class MusicAssistantAPI {
         },
       );
 
-      _logger.log('Connected to Music Assistant successfully');
+      _logger.log('Connection: Connected to server');
       _connectionInProgress?.complete();
       _connectionInProgress = null;
     } catch (e) {
-      _logger.log('Connection error: $e');
+      _logger.log('Connection: Failed - $e');
       _updateConnectionState(MAConnectionState.error);
       _connectionInProgress?.completeError(e);
       _connectionInProgress = null;
@@ -240,9 +240,9 @@ class MusicAssistantAPI {
         _authRequired = needsAuth || authEnabled || (_schemaVersion != null && _schemaVersion! >= 28);
 
         if (_authRequired) {
-          _logger.log('🔐 Server requires authentication (schema $_schemaVersion)');
+          _logger.log('Server: Requires authentication');
         } else {
-          _logger.log('✓ Server does not require authentication');
+          _logger.log('Server: No authentication required');
           _isAuthenticated = true; // No auth needed = effectively authenticated
         }
 
@@ -1318,11 +1318,11 @@ class MusicAssistantAPI {
         attempt++;
         if (attempt > 1) {
           final delay = Duration(milliseconds: 500 * (1 << (attempt - 2))); // 500ms, 1s, 2s
-          _logger.log('🔄 Retry attempt $attempt/$maxRetries after ${delay.inMilliseconds}ms...');
+          _logger.log('Player: Retrying... (attempt $attempt/$maxRetries)');
           await Future.delayed(delay);
         }
 
-        _logger.log('🎵 Registering builtin player: id=$playerId, name=$name (attempt $attempt/$maxRetries)');
+        _logger.log('Player: Registering "$name" (attempt $attempt/$maxRetries)');
 
         final response = await _sendCommand(
           'builtin_player/register',
@@ -1332,8 +1332,8 @@ class MusicAssistantAPI {
           },
         );
 
-        _logger.log('✅ Builtin player registered successfully');
-        _logger.log('📊 Registration response: ${response['result']}');
+        _logger.log('Player: Registered successfully');
+        // Internal: Registration response logged for debugging
 
         // NOTE: config/players/save removed - official MA clients don't use it
         // and it causes error 999. Registration alone is sufficient.
@@ -1346,25 +1346,25 @@ class MusicAssistantAPI {
         final registeredPlayer = players.where((p) => p.playerId == playerId).firstOrNull;
 
         if (registeredPlayer == null) {
-          _logger.log('⚠️ WARNING: Player was registered but not found in player list');
+          _logger.log('Player: Warning - not found in player list after registration');
           // This is concerning but not fatal - player might appear later
         } else if (!registeredPlayer.available) {
-          _logger.log('⚠️ WARNING: Player registered but marked as unavailable');
+          _logger.log('Player: Warning - registered but marked unavailable');
           // This could indicate a timing issue - consider retrying
           if (attempt < maxRetries) {
             throw Exception('Player registered but unavailable - will retry');
           }
         } else {
-          _logger.log('✅ Verification passed: Player is available in MA');
+          _logger.log('Player: Verified and available');
         }
 
         // Success - exit retry loop
         return;
       } catch (e) {
-        _logger.log('❌ Registration attempt $attempt failed: $e');
+        _logger.log('Player: Registration attempt $attempt failed - $e');
 
         if (attempt >= maxRetries) {
-          _logger.log('❌ All $maxRetries registration attempts failed');
+          _logger.log('Player: All $maxRetries registration attempts failed');
           rethrow; // Final failure - propagate up
         }
         // Otherwise, continue to next retry
@@ -1400,7 +1400,7 @@ class MusicAssistantAPI {
   /// Returns the player ID to adopt, or null if no match found
   Future<String?> findAdoptableGhostPlayer(String ownerName) async {
     try {
-      _logger.log('🔍 Looking for adoptable ghost player for owner: $ownerName');
+      _logger.log('Ghost adoption: Looking for existing player for "$ownerName"');
 
       final allPlayers = await getPlayers();
 
@@ -1410,7 +1410,7 @@ class MusicAssistantAPI {
           : "$ownerName's Phone";
       final expectedName2 = "$ownerName's Phone"; // Always check this variant too
 
-      _logger.log('🔍 Looking for players named: "$expectedName1" or "$expectedName2"');
+      _logger.log('Ghost adoption: Searching for "$expectedName1" or "$expectedName2"');
 
       // Find players that match the name pattern
       // Prioritize: 1) ensemble_ + unavailable, 2) ensemble_ + available, 3) other unavailable
@@ -1432,7 +1432,7 @@ class MusicAssistantAPI {
           // Priority scoring: ensemble prefix (2 points) + unavailable (1 point)
           final priority = (isEnsemblePlayer ? 2 : 0) + (isUnavailable ? 1 : 0);
 
-          _logger.log('🔍 Found matching player: ${player.name} (${player.playerId}) '
+          _logger.log('Ghost adoption: Found "${player.name}" (${player.playerId}) '
                      'available=${player.available} priority=$priority');
 
           if (priority > matchPriority) {
@@ -1448,23 +1448,23 @@ class MusicAssistantAPI {
       }
 
       if (matchedPlayer != null) {
-        _logger.log('✅ Found adoptable player: ${matchedPlayer.name} (${matchedPlayer.playerId})');
+        _logger.log('Ghost adoption: Will adopt "${matchedPlayer.name}"');
 
         // CRITICAL: Verify the player's config is not corrupted before adopting
         // Corrupted configs (missing player_id field) cause error 999 on playback
         final configValid = await _verifyPlayerConfig(matchedPlayer.playerId);
         if (!configValid) {
-          _logger.log('⚠️ Player config is corrupted, skipping adoption to avoid error 999');
+          _logger.log('Ghost adoption: Player config corrupted, skipping');
           return null;
         }
 
         return matchedPlayer.playerId;
       }
 
-      _logger.log('🔍 No adoptable ghost player found');
+      _logger.log('Ghost adoption: No existing player found');
       return null;
     } catch (e) {
-      _logger.log('❌ Error finding adoptable ghost player: $e');
+      _logger.log('Ghost adoption: Error - $e');
       return null;
     }
   }

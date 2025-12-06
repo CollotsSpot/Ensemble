@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/music_assistant_provider.dart';
 import '../services/settings_service.dart';
@@ -812,12 +813,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextButton.icon(
                             onPressed: () {
                               final logs = DebugLogger().getAllLogs();
-                              // Copy to clipboard
                               if (logs.isNotEmpty) {
-                                // Simple copy - in real app would use Clipboard API
+                                Clipboard.setData(ClipboardData(text: logs));
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Logs copied! (Feature coming soon)'),
+                                    content: Text('Logs copied to clipboard'),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('No logs to copy'),
                                     duration: Duration(seconds: 2),
                                   ),
                                 );
