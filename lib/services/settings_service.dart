@@ -172,6 +172,9 @@ class SettingsService {
   // Podcast Cover Cache (iTunes URLs for high-res artwork)
   static const String _keyPodcastCoverCache = 'podcast_cover_cache';
 
+  // Music provider filter
+  static const String _keyDisabledMusicProviders = 'disabled_music_providers'; // JSON list of disabled provider instance IDs
+
   static Future<String?> getServerUrl() async {
     final prefs = await _getPrefs();
     return prefs.getString(_keyServerUrl);
@@ -870,5 +873,49 @@ class SettingsService {
     final cache = await getPodcastCoverCache();
     cache[podcastId] = url;
     await setPodcastCoverCache(cache);
+  }
+
+  // ============ MUSIC PROVIDER FILTER ============
+
+  /// Get list of disabled music provider instance IDs
+  /// Returns empty list if none disabled (all providers enabled)
+  static Future<List<String>> getDisabledMusicProviders() async {
+    final prefs = await _getPrefs();
+    final json = prefs.getString(_keyDisabledMusicProviders);
+    if (json == null || json.isEmpty) return [];
+    try {
+      return (jsonDecode(json) as List<dynamic>).cast<String>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Set list of disabled music provider instance IDs
+  static Future<void> setDisabledMusicProviders(List<String> disabledIds) async {
+    final prefs = await _getPrefs();
+    if (disabledIds.isEmpty) {
+      await prefs.remove(_keyDisabledMusicProviders);
+    } else {
+      await prefs.setString(_keyDisabledMusicProviders, jsonEncode(disabledIds));
+    }
+  }
+
+  /// Check if a specific provider is disabled
+  static Future<bool> isProviderDisabled(String instanceId) async {
+    final disabled = await getDisabledMusicProviders();
+    return disabled.contains(instanceId);
+  }
+
+  /// Toggle a provider's enabled/disabled state
+  static Future<void> toggleProviderEnabled(String instanceId, bool enabled) async {
+    final disabled = await getDisabledMusicProviders();
+    if (enabled) {
+      disabled.remove(instanceId);
+    } else {
+      if (!disabled.contains(instanceId)) {
+        disabled.add(instanceId);
+      }
+    }
+    await setDisabledMusicProviders(disabled);
   }
 }

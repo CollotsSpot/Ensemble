@@ -145,6 +145,9 @@ class SearchScreenState extends State<SearchScreen> {
   double _highlightLeft = 0;
   double _highlightWidth = 80; // Default width until measured
 
+  // Track provider filter to detect changes
+  List<String>? _lastDisabledProviders;
+
   @override
   void initState() {
     super.initState();
@@ -153,18 +156,48 @@ class SearchScreenState extends State<SearchScreen> {
     _loadRecentSearches();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Check if provider filter changed and clear caches if so
+    final provider = context.read<MusicAssistantProvider>();
+    final currentDisabled = provider.disabledProviders;
+    if (_lastDisabledProviders != null &&
+        !_listEquals(_lastDisabledProviders!, currentDisabled)) {
+      _cachedAvailableFilters = null;
+      _cachedListItems.clear();
+    }
+    _lastDisabledProviders = List.from(currentDisabled);
+  }
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// Get filtered search results based on provider filter settings
+  Map<String, List<MediaItem>> _getFilteredResults(MusicAssistantProvider provider) {
+    return provider.filterSearchResults(_searchResults);
+  }
+
   /// Get list of available filters based on current results (cached)
+  /// Uses provider filter to exclude disabled providers from results
   List<String> _getAvailableFilters() {
     if (_cachedAvailableFilters != null) return _cachedAvailableFilters!;
 
+    final provider = context.read<MusicAssistantProvider>();
+    final filtered = _getFilteredResults(provider);
     final filters = <String>['all'];
-    if (_searchResults['artists']?.isNotEmpty == true) filters.add('artists');
-    if (_searchResults['albums']?.isNotEmpty == true) filters.add('albums');
-    if (_searchResults['tracks']?.isNotEmpty == true) filters.add('tracks');
-    if (_searchResults['playlists']?.isNotEmpty == true) filters.add('playlists');
-    if (_searchResults['audiobooks']?.isNotEmpty == true) filters.add('audiobooks');
-    if (_searchResults['radios']?.isNotEmpty == true) filters.add('radios');
-    if (_searchResults['podcasts']?.isNotEmpty == true) filters.add('podcasts');
+    if (filtered['artists']?.isNotEmpty == true) filters.add('artists');
+    if (filtered['albums']?.isNotEmpty == true) filters.add('albums');
+    if (filtered['tracks']?.isNotEmpty == true) filters.add('tracks');
+    if (filtered['playlists']?.isNotEmpty == true) filters.add('playlists');
+    if (filtered['audiobooks']?.isNotEmpty == true) filters.add('audiobooks');
+    if (filtered['radios']?.isNotEmpty == true) filters.add('radios');
+    if (filtered['podcasts']?.isNotEmpty == true) filters.add('podcasts');
     _cachedAvailableFilters = filters;
     return filters;
   }
@@ -691,13 +724,16 @@ class SearchScreenState extends State<SearchScreen> {
       );
     }
 
-    final artists = _searchResults['artists'] as List<MediaItem>? ?? [];
-    final albums = _searchResults['albums'] as List<MediaItem>? ?? [];
-    final tracks = _searchResults['tracks'] as List<MediaItem>? ?? [];
-    final playlists = _searchResults['playlists'] as List<MediaItem>? ?? [];
-    final audiobooks = _searchResults['audiobooks'] as List<MediaItem>? ?? [];
-    final radios = _searchResults['radios'] as List<MediaItem>? ?? [];
-    final podcasts = _searchResults['podcasts'] as List<MediaItem>? ?? [];
+    // Apply provider filter to search results
+    final provider = context.read<MusicAssistantProvider>();
+    final filtered = _getFilteredResults(provider);
+    final artists = filtered['artists'] as List<MediaItem>? ?? [];
+    final albums = filtered['albums'] as List<MediaItem>? ?? [];
+    final tracks = filtered['tracks'] as List<MediaItem>? ?? [];
+    final playlists = filtered['playlists'] as List<MediaItem>? ?? [];
+    final audiobooks = filtered['audiobooks'] as List<MediaItem>? ?? [];
+    final radios = filtered['radios'] as List<MediaItem>? ?? [];
+    final podcasts = filtered['podcasts'] as List<MediaItem>? ?? [];
 
     final hasResults = artists.isNotEmpty || albums.isNotEmpty || tracks.isNotEmpty ||
                        playlists.isNotEmpty || audiobooks.isNotEmpty || radios.isNotEmpty ||

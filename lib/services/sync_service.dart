@@ -119,7 +119,8 @@ class SyncService with ChangeNotifier {
 
   /// Sync library data from MA API in background
   /// Updates database cache and notifies listeners when complete
-  Future<void> syncFromApi(MusicAssistantAPI api, {bool force = false}) async {
+  /// If provider is specified, only fetch items from that provider (server-side filtering)
+  Future<void> syncFromApi(MusicAssistantAPI api, {bool force = false, String? provider}) async {
     if (_isSyncing) {
       _logger.log('🔄 Sync already in progress, skipping');
       return;
@@ -149,16 +150,17 @@ class SyncService with ChangeNotifier {
     notifyListeners();
 
     try {
-      _logger.log('🔄 Starting background library sync...');
+      _logger.log('🔄 Starting background library sync (provider=$provider)...');
 
       // Read artist filter setting - when ON, only fetch artists that have albums
       final showOnlyArtistsWithAlbums = await SettingsService.getShowOnlyArtistsWithAlbums();
-      _logger.log('🎨 Sync using albumArtistsOnly: $showOnlyArtistsWithAlbums');
+      _logger.log('🎨 Sync using albumArtistsOnly: $showOnlyArtistsWithAlbums, provider: $provider');
 
       // Fetch fresh data from MA API (in parallel for speed)
+      // If provider is specified, filter to only that provider's library items
       final results = await Future.wait([
-        api.getAlbums(limit: 1000),
-        api.getArtists(limit: 1000, albumArtistsOnly: showOnlyArtistsWithAlbums),
+        api.getAlbums(limit: 1000, provider: provider),
+        api.getArtists(limit: 1000, albumArtistsOnly: showOnlyArtistsWithAlbums, provider: provider),
         api.getAudiobooks(limit: 1000),
         api.getPlaylists(limit: 1000),
       ]);
@@ -273,11 +275,12 @@ class SyncService with ChangeNotifier {
   }
 
   /// Force a fresh sync (for pull-to-refresh)
-  Future<void> forceSync(MusicAssistantAPI api) async {
-    await syncFromApi(api, force: true);
+  Future<void> forceSync(MusicAssistantAPI api, {String? provider}) async {
+    await syncFromApi(api, force: true, provider: provider);
   }
 
-  /// Clear all cached data
+  /// Clear all cached data and reset sync state
+  /// This allows a fresh sync to start even if one was in progress
   Future<void> clearCache() async {
     if (!_db.isInitialized) return;
 
@@ -287,9 +290,10 @@ class SyncService with ChangeNotifier {
     _cachedAudiobooks = [];
     _cachedPlaylists = [];
     _lastSyncTime = null;
+    _isSyncing = false;  // Reset so a new sync can start
     _status = SyncStatus.idle;
     notifyListeners();
-    _logger.log('🗑️ Library cache cleared');
+    _logger.log('🗑️ Library cache cleared (sync state reset)');
   }
 
   /// Get albums (from cache or empty if not loaded)

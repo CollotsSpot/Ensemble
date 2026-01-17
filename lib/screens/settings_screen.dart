@@ -49,6 +49,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showHints = true;
   // Library settings
   bool _showOnlyArtistsWithAlbums = false;
+  // Music provider filter settings
+  List<String> _disabledProviders = [];
 
   @override
   void initState() {
@@ -107,6 +109,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Load library settings
     final showOnlyArtistsWithAlbums = await SettingsService.getShowOnlyArtistsWithAlbums();
 
+    // Load music provider filter settings
+    final disabledProviders = await SettingsService.getDisabledMusicProviders();
+
     if (mounted) {
       setState(() {
         _showRecentAlbums = showRecent;
@@ -129,6 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _volumePrecisionMode = volumePrecision;
         _showHints = showHints;
         _showOnlyArtistsWithAlbums = showOnlyArtistsWithAlbums;
+        _disabledProviders = disabledProviders;
       });
     }
   }
@@ -704,6 +710,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
 
             const SizedBox(height: 32),
+
+            // Music Providers section
+            if (provider.musicProviders.isNotEmpty) ...[
+              Text(
+                'Music Providers',
+                style: textTheme.titleMedium?.copyWith(
+                  color: colorScheme.onBackground,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Filter content shown in Home, Library, and Search',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onBackground.withOpacity(0.6),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceVariant.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: provider.musicProviders.map((musicProvider) {
+                    final isEnabled = !_disabledProviders.contains(musicProvider.instanceId);
+                    return SwitchListTile(
+                      title: Text(
+                        musicProvider.name,
+                        style: TextStyle(color: colorScheme.onSurface),
+                      ),
+                      subtitle: musicProvider.isStreamingProvider
+                          ? Text(
+                              'Streaming',
+                              style: TextStyle(
+                                color: colorScheme.onSurface.withOpacity(0.6),
+                                fontSize: 12,
+                              ),
+                            )
+                          : null,
+                      value: isEnabled,
+                      onChanged: (value) async {
+                        await provider.toggleProviderEnabled(musicProvider.instanceId, value);
+                        setState(() {
+                          if (value) {
+                            _disabledProviders.remove(musicProvider.instanceId);
+                          } else {
+                            _disabledProviders.add(musicProvider.instanceId);
+                          }
+                        });
+                      },
+                      activeColor: colorScheme.primary,
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
 
             // Player section
             Text(

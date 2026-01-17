@@ -58,6 +58,10 @@ class MediaItem {
   final bool? favorite;
   final int? position;
   final Duration? duration;
+  final DateTime? timestampAdded;
+  final DateTime? timestampModified;
+  final DateTime? lastPlayed;
+  final int? playCount;
 
   MediaItem({
     required this.itemId,
@@ -71,6 +75,10 @@ class MediaItem {
     this.favorite,
     this.position,
     this.duration,
+    this.timestampAdded,
+    this.timestampModified,
+    this.lastPlayed,
+    this.playCount,
   });
 
   factory MediaItem.fromJson(Map<String, dynamic> json) {
@@ -81,6 +89,21 @@ class MediaItem {
         (e) => e.name == mediaTypeStr.toLowerCase(),
         orElse: () => MediaType.track,
       );
+    }
+
+    // Parse timestamp fields (can be int unix timestamp or ISO string)
+    DateTime? parseTimestamp(dynamic value) {
+      if (value == null) return null;
+      if (value is int) {
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+      }
+      if (value is double) {
+        return DateTime.fromMillisecondsSinceEpoch((value * 1000).toInt());
+      }
+      if (value is String) {
+        return DateTime.tryParse(value);
+      }
+      return null;
     }
 
     return MediaItem(
@@ -99,6 +122,10 @@ class MediaItem {
       duration: json['duration'] != null
           ? Duration(seconds: (json['duration'] as num).toInt())
           : null,
+      timestampAdded: parseTimestamp(json['timestamp_added']),
+      timestampModified: parseTimestamp(json['timestamp_modified']),
+      lastPlayed: parseTimestamp(json['last_played']),
+      playCount: json['play_count'] as int?,
     );
   }
 
@@ -116,6 +143,10 @@ class MediaItem {
       if (favorite != null) 'favorite': favorite,
       if (position != null) 'position': position,
       if (duration != null) 'duration': duration!.inSeconds,
+      if (timestampAdded != null) 'timestamp_added': timestampAdded!.millisecondsSinceEpoch ~/ 1000,
+      if (timestampModified != null) 'timestamp_modified': timestampModified!.millisecondsSinceEpoch ~/ 1000,
+      if (lastPlayed != null) 'last_played': lastPlayed!.millisecondsSinceEpoch ~/ 1000,
+      if (playCount != null) 'play_count': playCount,
     };
   }
 }
@@ -130,6 +161,10 @@ class Artist extends MediaItem {
     super.providerMappings,
     super.metadata,
     super.favorite,
+    super.timestampAdded,
+    super.timestampModified,
+    super.lastPlayed,
+    super.playCount,
   }) : super(mediaType: MediaType.artist);
 
   factory Artist.fromJson(Map<String, dynamic> json) {
@@ -143,6 +178,10 @@ class Artist extends MediaItem {
       providerMappings: item.providerMappings,
       metadata: item.metadata,
       favorite: item.favorite,
+      timestampAdded: item.timestampAdded,
+      timestampModified: item.timestampModified,
+      lastPlayed: item.lastPlayed,
+      playCount: item.playCount,
     );
   }
 
@@ -167,6 +206,10 @@ class Album extends MediaItem {
     super.providerMappings,
     super.metadata,
     super.favorite,
+    super.timestampAdded,
+    super.timestampModified,
+    super.lastPlayed,
+    super.playCount,
   }) : super(mediaType: MediaType.album);
 
   factory Album.fromJson(Map<String, dynamic> json) {
@@ -194,6 +237,10 @@ class Album extends MediaItem {
       providerMappings: item.providerMappings,
       metadata: item.metadata,
       favorite: item.favorite,
+      timestampAdded: item.timestampAdded,
+      timestampModified: item.timestampModified,
+      lastPlayed: item.lastPlayed,
+      playCount: item.playCount,
     );
   }
 
@@ -240,6 +287,10 @@ class Track extends MediaItem {
     super.favorite,
     super.position,
     super.duration,
+    super.timestampAdded,
+    super.timestampModified,
+    super.lastPlayed,
+    super.playCount,
   }) : super(mediaType: MediaType.track);
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -261,6 +312,10 @@ class Track extends MediaItem {
       favorite: item.favorite,
       position: item.position,
       duration: item.duration,
+      timestampAdded: item.timestampAdded,
+      timestampModified: item.timestampModified,
+      lastPlayed: item.lastPlayed,
+      playCount: item.playCount,
     );
   }
 
@@ -295,6 +350,10 @@ class Playlist extends MediaItem {
     super.providerMappings,
     super.metadata,
     super.favorite,
+    super.timestampAdded,
+    super.timestampModified,
+    super.lastPlayed,
+    super.playCount,
   }) : super(mediaType: MediaType.playlist);
 
   factory Playlist.fromJson(Map<String, dynamic> json) {
@@ -311,6 +370,10 @@ class Playlist extends MediaItem {
       providerMappings: item.providerMappings,
       metadata: item.metadata,
       favorite: item.favorite,
+      timestampAdded: item.timestampAdded,
+      timestampModified: item.timestampModified,
+      lastPlayed: item.lastPlayed,
+      playCount: item.playCount,
     );
   }
 }

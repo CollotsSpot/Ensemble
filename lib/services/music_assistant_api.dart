@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../constants/network.dart';
 import '../constants/timings.dart' show Timings, LibraryConstants;
 import '../models/media_item.dart';
+import '../models/music_provider.dart';
 import '../models/player.dart';
 import 'debug_logger.dart';
 import 'settings_service.dart';
@@ -51,6 +52,10 @@ class MusicAssistantAPI {
   Map<String, dynamic>? _serverInfo;
   bool _authRequired = false;
   int? _schemaVersion;
+
+  // Music providers (type == "music")
+  List<MusicProvider> _musicProviders = [];
+  List<MusicProvider> get musicProviders => _musicProviders;
 
   // Auth state
   bool _isAuthenticated = false;
@@ -376,23 +381,30 @@ class MusicAssistantAPI {
     String? search,
     bool? favoriteOnly,
     bool albumArtistsOnly = true,
+    String? orderBy,
+    String? provider,  // Filter to specific provider instance
   }) async {
     try {
+      final args = {
+        if (limit != null) 'limit': limit,
+        if (offset != null) 'offset': offset,
+        if (search != null) 'search': search,
+        if (favoriteOnly != null) 'favorite': favoriteOnly,
+        'album_artists_only': albumArtistsOnly,
+        if (orderBy != null) 'order_by': orderBy,
+        if (provider != null) 'provider': provider,
+      };
+      _logger.log('🔍 API getArtists args: $args');
       final response = await _sendCommand(
         'music/artists/library_items',
-        args: {
-          if (limit != null) 'limit': limit,
-          if (offset != null) 'offset': offset,
-          if (search != null) 'search': search,
-          if (favoriteOnly != null) 'favorite': favoriteOnly,
-          'album_artists_only': albumArtistsOnly,
-        },
+        args: args,
       );
 
       final items = response['result'] as List<dynamic>?;
       if (items == null) {
         return [];
       }
+      _logger.log('🔍 API getArtists returned ${items.length} items');
       return items
           .map((item) => Artist.fromJson(item as Map<String, dynamic>))
           .toList();
@@ -402,7 +414,7 @@ class MusicAssistantAPI {
     }
   }
 
-  Future<List<Artist>> getRandomArtists({int limit = 10, bool albumArtistsOnly = true}) async {
+  Future<List<Artist>> getRandomArtists({int limit = 10, bool albumArtistsOnly = true, String? provider}) async {
     try {
       final response = await _sendCommand(
         'music/artists/library_items',
@@ -410,6 +422,7 @@ class MusicAssistantAPI {
           'limit': limit,
           'order_by': 'random',
           'album_artists_only': albumArtistsOnly,
+          if (provider != null) 'provider': provider,
         },
       );
 
@@ -431,6 +444,8 @@ class MusicAssistantAPI {
     String? search,
     bool? favoriteOnly,
     String? artistId,
+    String? orderBy,
+    String? provider,  // Filter to specific provider instance
   }) async {
     try {
       final args = <String, dynamic>{
@@ -439,7 +454,10 @@ class MusicAssistantAPI {
         if (search != null) 'search': search,
         if (favoriteOnly != null) 'favorite': favoriteOnly,
         if (artistId != null) 'artist_id': artistId,
+        if (orderBy != null) 'order_by': orderBy,
+        if (provider != null) 'provider': provider,
       };
+      _logger.log('🔍 API getAlbums args: $args');
 
       final response = await _sendCommand(
         'music/albums/library_items',
@@ -448,6 +466,7 @@ class MusicAssistantAPI {
 
       final items = response['result'] as List<dynamic>?;
       if (items == null) return [];
+      _logger.log('🔍 API getAlbums returned ${items.length} items');
 
       return items
           .map((item) => Album.fromJson(item as Map<String, dynamic>))
@@ -465,6 +484,8 @@ class MusicAssistantAPI {
     bool? favoriteOnly,
     String? artistId,
     String? albumId,
+    String? orderBy,
+    String? provider,  // Filter to specific provider instance
   }) async {
     try {
       final response = await _sendCommand(
@@ -473,9 +494,11 @@ class MusicAssistantAPI {
           if (limit != null) 'limit': limit,
           if (offset != null) 'offset': offset,
           if (search != null) 'search': search,
+          if (provider != null) 'provider': provider,
           if (favoriteOnly != null) 'favorite': favoriteOnly,
           if (artistId != null) 'artist': artistId,
           if (albumId != null) 'album': albumId,
+          if (orderBy != null) 'order_by': orderBy,
         },
       );
 
@@ -496,6 +519,7 @@ class MusicAssistantAPI {
     int? limit,
     int? offset,
     bool? favoriteOnly,
+    String? orderBy,
   }) async {
     try {
       final response = await _sendCommand(
@@ -504,6 +528,7 @@ class MusicAssistantAPI {
           if (limit != null) 'limit': limit,
           if (offset != null) 'offset': offset,
           if (favoriteOnly != null) 'favorite': favoriteOnly,
+          if (orderBy != null) 'order_by': orderBy,
         },
       );
 
@@ -555,6 +580,7 @@ class MusicAssistantAPI {
     int? limit,
     int? offset,
     bool? favoriteOnly,
+    String? orderBy,
   }) async {
     try {
       final response = await _sendCommand(
@@ -563,6 +589,7 @@ class MusicAssistantAPI {
           if (limit != null) 'limit': limit,
           if (offset != null) 'offset': offset,
           if (favoriteOnly != null) 'favorite': favoriteOnly,
+          if (orderBy != null) 'order_by': orderBy,
         },
       );
 
@@ -1338,13 +1365,14 @@ class MusicAssistantAPI {
   }
 
   /// Get random albums
-  Future<List<Album>> getRandomAlbums({int limit = 10}) async {
+  Future<List<Album>> getRandomAlbums({int limit = 10, String? provider}) async {
     try {
       final response = await _sendCommand(
         'music/albums/library_items',
         args: {
           'limit': limit,
           'order_by': 'random',
+          if (provider != null) 'provider': provider,
         },
       );
 
@@ -1460,6 +1488,7 @@ class MusicAssistantAPI {
     int? offset,
     String? search,
     bool? favoriteOnly,
+    String? orderBy,
   }) async {
     try {
       final response = await _sendCommand(
@@ -1469,6 +1498,7 @@ class MusicAssistantAPI {
           if (offset != null) 'offset': offset,
           if (search != null) 'search': search,
           if (favoriteOnly != null) 'favorite': favoriteOnly,
+          if (orderBy != null) 'order_by': orderBy,
         },
       );
 
@@ -1490,7 +1520,7 @@ class MusicAssistantAPI {
       final response = await _sendCommand(
         'music/playlist',
         args: {
-          'provider': provider,
+          'provider_instance_id_or_domain': provider,
           'item_id': itemId,
         },
       );
@@ -3269,10 +3299,22 @@ class MusicAssistantAPI {
         _logger.log('⚠️ Could not load provider manifests: $e');
       }
 
-      // Fetch provider instances (active providers)
+      // Fetch provider instances (active providers) and extract music providers
       try {
-        await _sendCommand('providers');
-        _logger.log('✓ Provider instances loaded');
+        final response = await _sendCommand('providers');
+        final providers = response['result'] as List<dynamic>?;
+        if (providers != null) {
+          _musicProviders = providers
+              .where((p) => (p as Map<String, dynamic>)['type'] == 'music')
+              .map((p) => MusicProvider.fromJson(p as Map<String, dynamic>))
+              .where((p) => p.available) // Only include available providers
+              .where((p) => p.domain != 'music_assistant') // Exclude MA itself
+              .toList();
+          _logger.log('✓ Found ${_musicProviders.length} music providers:');
+          for (final p in _musicProviders) {
+            _logger.log('   - ${p.name}: instanceId="${p.instanceId}", domain="${p.domain}"');
+          }
+        }
       } catch (e) {
         _logger.log('⚠️ Could not load provider instances: $e');
       }
