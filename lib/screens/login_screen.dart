@@ -6,9 +6,12 @@ import '../services/database_service.dart';
 import '../services/profile_service.dart';
 import '../services/auth/auth_strategy.dart';
 import '../services/debug_logger.dart';
+import '../services/remote/remote_bridge.dart';
 import '../widgets/debug/debug_console.dart';
 import '../l10n/app_localizations.dart';
 import 'home_screen.dart';
+
+enum ConnectionMode { local, remote }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _authServerUrlController = TextEditingController(); // For separate auth server (Authelia)
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _remoteIdController = TextEditingController(); // Remote Access ID
   final FocusNode _usernameFocusNode = FocusNode();
 
   bool _isConnecting = false;
@@ -35,6 +39,12 @@ class _LoginScreenState extends State<LoginScreen> {
   List<String> _debugLogs = [];
   String? _resolvedServerUrl; // The actual URL after fallback (e.g., HTTP if HTTPS failed)
   bool _usedHttpFallback = false; // True if HTTPS failed and we fell back to HTTP
+
+  // Remote connection state
+  ConnectionMode _connectionMode = ConnectionMode.local;
+
+  // Static bridge instance - persists across screen transitions
+  static RemoteBridge? _remoteBridge;
 
   @override
   void initState() {
@@ -74,7 +84,10 @@ class _LoginScreenState extends State<LoginScreen> {
     _authServerUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _remoteIdController.dispose();
     _usernameFocusNode.dispose();
+    // Note: Don't stop _remoteBridge here - it needs to stay alive for the session
+    // It will be stopped when the app closes or user disconnects
     super.dispose();
   }
 
@@ -477,6 +490,99 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Connect via remote bridge (WebRTC tunnel)
+  Future<void> _connectRemote() async {
+    final remoteId = _remoteIdController.text.trim();
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (remoteId.isEmpty) {
+      setState(() {
+        _error = S.of(context)!.pleaseEnterRemoteId;
+      });
+      return;
+    }
+
+    if (username.isEmpty || password.isEmpty) {
+      setState(() {
+        _error = S.of(context)!.pleaseEnterCredentials;
+      });
+      return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _error = null;
+    });
+
+    _addDebugLog('Starting remote connection to: $remoteId');
+
+    try {
+      // Start the remote bridge
+      _remoteBridge = RemoteBridge();
+      final port = await _remoteBridge!.start(remoteId, username, password);
+
+      if (port == null) {
+        setState(() {
+          _error = S.of(context)!.remoteConnectionFailed;
+          _isConnecting = false;
+        });
+        return;
+      }
+
+      _addDebugLog('Remote bridge started on port $port');
+
+      // Connect to the local bridge endpoint
+      final serverUrl = 'ws://localhost:$port';
+      final provider = context.read<MusicAssistantProvider>();
+
+      _addDebugLog('Connecting to bridge at $serverUrl');
+      await provider.connectToServer(serverUrl, isRemoteMode: true);
+
+      // Wait for connection
+      for (int i = 0; i < 10; i++) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (provider.isConnected) break;
+      }
+
+      if (provider.isConnected) {
+        _addDebugLog('Connected successfully via remote bridge');
+
+        // Save credentials for future auto-login
+        await SettingsService.setUsername(username);
+        await SettingsService.setPassword(password);
+
+        // For first-time users, wait for player selection
+        final hasCompletedOnboarding = await SettingsService.getHasCompletedOnboarding();
+        if (!hasCompletedOnboarding) {
+          for (int i = 0; i < 20; i++) {
+            await Future.delayed(const Duration(milliseconds: 250));
+            if (provider.selectedPlayer != null) break;
+          }
+        }
+
+        // Navigate to home screen
+        if (mounted) {
+          FocusScope.of(context).unfocus();
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      } else {
+        setState(() {
+          _error = S.of(context)!.connectionFailed;
+          _isConnecting = false;
+        });
+      }
+    } catch (e) {
+      _addDebugLog('Remote connection error: $e');
+      setState(() {
+        _error = 'Remote connection failed: ${e.toString()}';
+        _isConnecting = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -509,9 +615,227 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
 
-              // Server URL
+              // Connection Mode Toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceVariant.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _isConnecting ? null : () {
+                          setState(() {
+                            _connectionMode = ConnectionMode.local;
+                            _error = null;
+                            _detectedAuthStrategy = null;
+                            _detectedAuthType = null;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: _connectionMode == ConnectionMode.local
+                                ? colorScheme.primary
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.home_rounded,
+                                size: 20,
+                                color: _connectionMode == ConnectionMode.local
+                                    ? colorScheme.onPrimary
+                                    : colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                S.of(context)!.localConnection,
+                                style: TextStyle(
+                                  color: _connectionMode == ConnectionMode.local
+                                      ? colorScheme.onPrimary
+                                      : colorScheme.onSurface.withOpacity(0.6),
+                                  fontWeight: _connectionMode == ConnectionMode.local
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _isConnecting ? null : () {
+                          setState(() {
+                            _connectionMode = ConnectionMode.remote;
+                            _error = null;
+                            _detectedAuthStrategy = null;
+                            _detectedAuthType = null;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: _connectionMode == ConnectionMode.remote
+                                ? colorScheme.primary
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.cloud_rounded,
+                                size: 20,
+                                color: _connectionMode == ConnectionMode.remote
+                                    ? colorScheme.onPrimary
+                                    : colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                S.of(context)!.remoteConnection,
+                                style: TextStyle(
+                                  color: _connectionMode == ConnectionMode.remote
+                                      ? colorScheme.onPrimary
+                                      : colorScheme.onSurface.withOpacity(0.6),
+                                  fontWeight: _connectionMode == ConnectionMode.remote
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // REMOTE MODE: Remote Access ID + Credentials
+              if (_connectionMode == ConnectionMode.remote) ...[
+                Text(
+                  S.of(context)!.remoteAccessId,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onBackground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  S.of(context)!.remoteAccessIdHint,
+                  style: TextStyle(
+                    color: colorScheme.onBackground.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _remoteIdController,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: 'abc123def456',
+                    hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.vpn_key_rounded,
+                      color: colorScheme.onSurface.withOpacity(0.54),
+                    ),
+                  ),
+                  enabled: !_isConnecting,
+                  keyboardType: TextInputType.text,
+                  textInputAction: TextInputAction.next,
+                ),
+
+                const SizedBox(height: 24),
+
+                // Username for remote
+                Text(
+                  S.of(context)!.username,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onBackground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _usernameController,
+                  focusNode: _connectionMode == ConnectionMode.remote ? _usernameFocusNode : null,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: S.of(context)!.username,
+                    hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.person_rounded,
+                      color: colorScheme.onSurface.withOpacity(0.54),
+                    ),
+                  ),
+                  enabled: !_isConnecting,
+                  textInputAction: TextInputAction.next,
+                ),
+
+                const SizedBox(height: 16),
+
+                // Password for remote
+                Text(
+                  S.of(context)!.password,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onBackground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _passwordController,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: S.of(context)!.password,
+                    hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.lock_rounded,
+                      color: colorScheme.onSurface.withOpacity(0.54),
+                    ),
+                  ),
+                  obscureText: true,
+                  enabled: !_isConnecting,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _connectRemote(),
+                ),
+
+                const SizedBox(height: 16),
+              ],
+
+              // LOCAL MODE: Server URL, Port, etc.
+              if (_connectionMode == ConnectionMode.local) ...[
               Text(
                 S.of(context)!.serverAddress,
                 style: textTheme.titleMedium?.copyWith(
@@ -856,6 +1180,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
               ],
+              ], // End of local mode conditional
 
               const SizedBox(height: 16),
 
@@ -902,7 +1227,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ElevatedButton(
                 onPressed: (_isConnecting || _isDetectingAuth)
                     ? null
-                    : (_detectedAuthStrategy == null ? _detectAuthRequirements : _connect),
+                    : _connectionMode == ConnectionMode.remote
+                        ? _connectRemote
+                        : (_detectedAuthStrategy == null ? _detectAuthRequirements : _connect),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
@@ -944,7 +1271,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           )
                         : Text(
-                            _detectedAuthStrategy == null ? S.of(context)!.detectAndConnect : S.of(context)!.connect,
+                            _connectionMode == ConnectionMode.remote
+                                ? S.of(context)!.connect
+                                : (_detectedAuthStrategy == null ? S.of(context)!.detectAndConnect : S.of(context)!.connect),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

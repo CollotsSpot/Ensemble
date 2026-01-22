@@ -1653,5 +1653,35 @@
   "selectPlayerToAddToQueue": "Select player to add to queue",
   "@selectPlayerToAddToQueue": {
     "description": "Hint for selecting player to add to queue"
+  },
+
+  "localConnection": "Server URL",
+  "@localConnection": {
+    "description": "Direct connection mode toggle label"
+  },
+
+  "remoteConnection": "Remote Access ID",
+  "@remoteConnection": {
+    "description": "HA Remote Access connection mode toggle label"
+  },
+
+  "remoteAccessId": "Remote Access ID",
+  "@remoteAccessId": {
+    "description": "Remote access ID field label"
+  },
+
+  "remoteAccessIdHint": "Find this in Music Assistant Settings → Remote Access",
+  "@remoteAccessIdHint": {
+    "description": "Hint for remote access ID field"
+  },
+
+  "pleaseEnterRemoteId": "Please enter your Remote Access ID",
+  "@pleaseEnterRemoteId": {
+    "description": "Validation message for remote access ID"
+  },
+
+  "remoteConnectionFailed": "Remote connection failed. Please check your Remote Access ID and credentials.",
+  "@remoteConnectionFailed": {
+    "description": "Error message when remote connection fails"
   }
 }

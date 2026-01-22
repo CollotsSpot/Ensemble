@@ -1155,4 +1155,24 @@ class SDe extends S {
 
   @override
   String get selectPlayerToAddToQueue => 'Select player to add to queue';
+
+  @override
+  String get localConnection => 'Server URL';
+
+  @override
+  String get remoteConnection => 'Remote Access ID';
+
+  @override
+  String get remoteAccessId => 'Remote Access ID';
+
+  @override
+  String get remoteAccessIdHint =>
+      'Find this in Music Assistant Settings → Remote Access';
+
+  @override
+  String get pleaseEnterRemoteId => 'Please enter your Remote Access ID';
+
+  @override
+  String get remoteConnectionFailed =>
+      'Remote connection failed. Please check your Remote Access ID and credentials.';
 }

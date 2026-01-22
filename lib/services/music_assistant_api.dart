@@ -65,6 +65,12 @@ class MusicAssistantAPI {
   final Map<String, ProviderManifest> _providerManifests = {};
   Map<String, ProviderManifest> get providerManifests => _providerManifests;
 
+  // Remote mode flag - when true, images go through WebRTC bridge which doesn't support HTTP
+  // In this mode, we use external CDN URLs directly instead of imageproxy
+  bool _isRemoteMode = false;
+  bool get isRemoteMode => _isRemoteMode;
+  set isRemoteMode(bool value) => _isRemoteMode = value;
+
   MusicAssistantAPI(this.serverUrl, this.authManager);
 
   // Guard to prevent multiple simultaneous connection attempts
@@ -3216,6 +3222,12 @@ class MusicAssistantAPI {
       return null;
     }
 
+    // In remote mode (WebRTC bridge), HTTP requests don't work through the tunnel
+    // So we need to use external CDN URLs directly when available
+    if (_isRemoteMode) {
+      return _getImageUrlForRemoteMode(images, size);
+    }
+
     // Try to find a non-remotely accessible image first (prefer local/opensubsonic)
     Map<String, dynamic>? selectedImage;
     for (var img in images) {
@@ -3276,6 +3288,86 @@ class MusicAssistantAPI {
     final provider = selectedImage['provider'] as String?;
     // Use the imageproxy endpoint
     return '$baseUrl/imageproxy?provider=${Uri.encodeComponent(provider ?? "")}&size=$size&fmt=jpeg&path=${Uri.encodeComponent(imagePath)}';
+  }
+
+  /// Get image URL for remote mode - uses external CDN URLs directly
+  /// since HTTP requests don't work through the WebRTC bridge
+  String? _getImageUrlForRemoteMode(List<dynamic> images, int size) {
+    // Known external CDN domains that are publicly accessible
+    const externalDomains = [
+      'i.scdn.co',           // Spotify
+      'mosaic.scdn.co',      // Spotify playlists
+      'image-cdn-ak.spotifycdn.com',  // Spotify
+      'cdns-images.dzcdn.net',  // Deezer
+      'resources.tidal.com',    // Tidal
+      'e-cdns-images.dzcdn.net',  // Deezer
+      'is1-ssl.mzstatic.com',   // Apple Music
+      'is2-ssl.mzstatic.com',   // Apple Music
+      'is3-ssl.mzstatic.com',   // Apple Music
+      'is4-ssl.mzstatic.com',   // Apple Music
+      'is5-ssl.mzstatic.com',   // Apple Music
+      'lastfm.freetls.fastly.net',  // Last.fm
+      'coverartarchive.org',    // MusicBrainz
+      'archive.org',            // Internet Archive
+      'fanart.tv',              // Fanart.tv
+    ];
+
+    // First pass: look for images with paths that are external URLs
+    for (var img in images) {
+      final imgMap = img as Map<String, dynamic>;
+      final path = imgMap['path'] as String?;
+      if (path == null) continue;
+
+      // Check if path is already an external URL
+      if (path.startsWith('https://')) {
+        try {
+          final uri = Uri.parse(path);
+          // Check if it's from a known CDN
+          for (final domain in externalDomains) {
+            if (uri.host.contains(domain)) {
+              _logger.log('🖼️ Remote mode: using external CDN URL from ${uri.host}');
+              // For Spotify, we can request different sizes
+              if (uri.host.contains('scdn.co') || uri.host.contains('spotifycdn.com')) {
+                // Spotify image URLs can have size in path, but we'll use as-is
+                return path;
+              }
+              return path;
+            }
+          }
+          // Even if not a known CDN, if it's HTTPS it might work
+          _logger.log('🖼️ Remote mode: trying external URL from ${uri.host}');
+          return path;
+        } catch (e) {
+          // Not a valid URL, continue
+        }
+      }
+    }
+
+    // Second pass: try any image with a provider that typically has external URLs
+    for (var img in images) {
+      final imgMap = img as Map<String, dynamic>;
+      final provider = imgMap['provider'] as String?;
+      final path = imgMap['path'] as String?;
+      if (path == null) continue;
+
+      // Providers that typically have external URLs in their paths
+      if (provider != null) {
+        if (provider.contains('spotify') ||
+            provider.contains('tidal') ||
+            provider.contains('deezer') ||
+            provider.contains('apple_music') ||
+            provider.contains('musicbrainz')) {
+          if (path.startsWith('https://')) {
+            _logger.log('🖼️ Remote mode: using $provider image URL');
+            return path;
+          }
+        }
+      }
+    }
+
+    // No external URLs found - images won't load in remote mode for local files
+    _logger.log('🖼️ Remote mode: no external image URL available');
+    return null;
   }
 
   // ==================== iTunes Artwork Lookup ====================

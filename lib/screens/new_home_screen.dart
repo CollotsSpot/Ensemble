@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/music_assistant_provider.dart';
@@ -226,6 +227,21 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
         titleSpacing: 0,
         centerTitle: false,
         actions: [
+          // Copy logs button for debugging
+          IconButton(
+            icon: const Icon(Icons.bug_report_outlined, size: 20),
+            onPressed: () {
+              final logs = DebugLogger().entries.map((e) => e.formatted).join('\n');
+              Clipboard.setData(ClipboardData(text: logs));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${DebugLogger().entries.length} log entries copied'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            tooltip: 'Copy logs',
+          ),
           // Sync indicator - shows when library is syncing in background
           ListenableBuilder(
             listenable: SyncService.instance,

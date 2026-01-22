@@ -1029,7 +1029,7 @@ class MusicAssistantProvider with ChangeNotifier {
   // CONNECTION
   // ============================================================================
 
-  Future<void> connectToServer(String serverUrl) async {
+  Future<void> connectToServer(String serverUrl, {bool isRemoteMode = false}) async {
     try {
       _error = null;
       _serverUrl = serverUrl;
@@ -1039,6 +1039,7 @@ class MusicAssistantProvider with ChangeNotifier {
       _api?.dispose();
 
       _api = MusicAssistantAPI(serverUrl, _authManager);
+      _api!.isRemoteMode = isRemoteMode;
 
       _connectionStateSubscription?.cancel();
       _connectionStateSubscription = _api!.connectionState.listen(

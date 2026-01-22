@@ -2122,6 +2122,42 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Select player to add to queue'**
   String get selectPlayerToAddToQueue;
+
+  /// Direct connection mode toggle label
+  ///
+  /// In en, this message translates to:
+  /// **'Server URL'**
+  String get localConnection;
+
+  /// HA Remote Access connection mode toggle label
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Access ID'**
+  String get remoteConnection;
+
+  /// Remote access ID field label
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Access ID'**
+  String get remoteAccessId;
+
+  /// Hint for remote access ID field
+  ///
+  /// In en, this message translates to:
+  /// **'Find this in Music Assistant Settings → Remote Access'**
+  String get remoteAccessIdHint;
+
+  /// Validation message for remote access ID
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your Remote Access ID'**
+  String get pleaseEnterRemoteId;
+
+  /// Error message when remote connection fails
+  ///
+  /// In en, this message translates to:
+  /// **'Remote connection failed. Please check your Remote Access ID and credentials.'**
+  String get remoteConnectionFailed;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {
