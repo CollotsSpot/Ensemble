@@ -59,7 +59,7 @@ android {
 
     defaultConfig {
         applicationId "com.musicassistant.music_assistant"
-        minSdk 21
+        minSdkVersion flutter.minSdkVersion
         targetSdk 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
