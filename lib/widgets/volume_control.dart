@@ -225,11 +225,8 @@ class _VolumeControlState extends State<VolumeControl> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final sliderWidth = constraints.maxWidth;
-                // Calculate thumb position to match Flutter Slider's internal positioning
-                // The Slider uses overlayRadius as padding on each side for the track
-                const overlayRadius = 20.0; // Must match SliderThemeData overlayShape
-                final thumbPosition = overlayRadius +
-                    (currentVolume.clamp(0.0, 1.0) * (sliderWidth - 2 * overlayRadius));
+                // Calculate thumb position for the custom slider track
+                final thumbPosition = sliderWidth * currentVolume.clamp(0.0, 1.0);
 
                 return Stack(
                   clipBehavior: Clip.none,
@@ -311,22 +308,56 @@ class _VolumeControlState extends State<VolumeControl> {
                           _pendingVolume = null;
                         });
                       },
-                      child: SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 2,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
-                          activeTrackColor: _inPrecisionMode ? accentColor : Colors.white,
-                          inactiveTrackColor: Colors.white.withOpacity(0.3),
-                          thumbColor: _inPrecisionMode ? accentColor : Colors.white,
-                          overlayColor: (_inPrecisionMode ? accentColor : Colors.white).withOpacity(0.2),
-                        ),
-                        child: AbsorbPointer(
-                          // AbsorbPointer prevents Slider from handling gestures
-                          // Our GestureDetector handles everything for live updates
-                          child: Slider(
-                            value: currentVolume.clamp(0.0, 1.0),
-                            onChanged: (_) {},
+                      // Custom slider track (no Overlay needed - Flutter 3.38 Slider uses OverlayPortal)
+                      child: SizedBox(
+                        height: 48,
+                        child: Center(
+                          child: SizedBox(
+                            height: 20,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                // Inactive track (full width, thinner)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  top: 8.5,
+                                  child: Container(
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.3),
+                                      borderRadius: BorderRadius.circular(1.5),
+                                    ),
+                                  ),
+                                ),
+                                // Active track
+                                Positioned(
+                                  left: 0,
+                                  top: 7,
+                                  child: Container(
+                                    width: sliderWidth * currentVolume.clamp(0.0, 1.0),
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: _inPrecisionMode ? accentColor : Colors.white,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                ),
+                                // Thumb
+                                Positioned(
+                                  left: (sliderWidth * currentVolume.clamp(0.0, 1.0)) - 6,
+                                  top: 4,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: _inPrecisionMode ? accentColor : Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),

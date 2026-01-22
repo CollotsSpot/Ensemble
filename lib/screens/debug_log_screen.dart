@@ -41,10 +41,12 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
       _logger.entries.where((e) => e.level.index >= _filterLevel.index).toList();
 
   void _copyLogs() {
-    Clipboard.setData(ClipboardData(text: _logger.getAllLogs()));
+    // Copy only the filtered entries that are currently displayed
+    final filteredLogs = _filteredEntries.map((e) => e.formatted).join('\n');
+    Clipboard.setData(ClipboardData(text: filteredLogs));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(S.of(context)!.logsCopied),
+        content: Text('${S.of(context)!.logsCopied} (${_filteredEntries.length} entries)'),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 2),
       ),
@@ -61,6 +63,8 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
         report,
         subject: S.of(context)!.ensembleBugReport,
       );
+    } catch (e) {
+      _logger.error('Share failed', error: e);
     } finally {
       if (mounted) {
         setState(() => _isGeneratingReport = false);

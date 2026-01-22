@@ -559,6 +559,7 @@ class SendspinService {
           'state': playerState,
           'volume': _volume,
           'muted': _isMuted,
+          'position': _position,
         },
       },
     });
@@ -627,6 +628,7 @@ class SendspinService {
           'state': 'synchronized',
           'volume': _volume,
           'muted': _isMuted,
+          'position': _position,
         },
       },
     }, allowDuringHandshake: true);

@@ -121,6 +121,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
   StreamSubscription<Map<String, dynamic>>? _queueItemsSubscription;
   final ValueNotifier<int> _progressNotifier = ValueNotifier<int>(0);
   final ValueNotifier<double?> _seekPositionNotifier = ValueNotifier<double?>(null);
+  bool _isSeeking = false; // Debounce flag to prevent rapid-fire seeks
 
   // Pre-computed static colors to avoid object creation during animation frames
   static const Color _shadowColor = Color(0x4D000000); // Colors.black.withOpacity(0.3)
@@ -2860,33 +2861,14 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                                 children: [
                                   SizedBox(
                                     height: 48, // Increase touch target height
-                                    // PERF Phase 1: Use cached SliderThemeData
-                                    child: SliderTheme(
-                                      data: _sliderTheme,
-                                      child: Slider(
-                                        value: currentProgress.clamp(0.0, currentTrack.duration!.inSeconds.toDouble()).toDouble(),
-                                        max: currentTrack.duration!.inSeconds.toDouble(),
-                                        onChanged: (value) => _seekPositionNotifier.value = value,
-                                        onChangeStart: (value) => _seekPositionNotifier.value = value,
-                                        onChangeEnd: (value) async {
-                                          try {
-                                            await maProvider.seek(selectedPlayer.playerId, value.round());
-                                            await Future.delayed(const Duration(milliseconds: 200));
-                                          } catch (e) {
-                                            if (mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(content: Text(S.of(context)!.errorSeeking(e.toString()))),
-                                              );
-                                            }
-                                          } finally {
-                                            if (mounted) {
-                                              _seekPositionNotifier.value = null;
-                                            }
-                                          }
-                                        },
-                                        activeColor: primaryColor,
-                                        inactiveColor: primaryColor20, // PERF: Use cached color
-                                      ),
+                                    child: _buildProgressSlider(
+                                      context,
+                                      currentProgress,
+                                      currentTrack.duration!.inSeconds.toDouble(),
+                                      primaryColor,
+                                      primaryColor20,
+                                      maProvider,
+                                      selectedPlayer.playerId,
                                     ),
                                   ),
                                   Padding(
@@ -4130,6 +4112,140 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
           ],
         ),
       ),
+    );
+  }
+
+  /// Custom progress slider that doesn't require Overlay widget
+  /// (Flutter 3.38's Material 3 Slider uses OverlayPortal which fails in our overlay context)
+  Widget _buildProgressSlider(
+    BuildContext context,
+    double currentProgress,
+    double maxProgress,
+    Color activeColor,
+    Color inactiveColor,
+    MusicAssistantProvider maProvider,
+    String playerId,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final progress = maxProgress > 0 ? (currentProgress / maxProgress).clamp(0.0, 1.0) : 0.0;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (details) {
+            final newProgress = (details.localPosition.dx / width).clamp(0.0, 1.0);
+            _seekPositionNotifier.value = newProgress * maxProgress;
+          },
+          onHorizontalDragUpdate: (details) {
+            final newProgress = (details.localPosition.dx / width).clamp(0.0, 1.0);
+            _seekPositionNotifier.value = newProgress * maxProgress;
+          },
+          onHorizontalDragCancel: () {
+            _seekPositionNotifier.value = null;
+          },
+          onHorizontalDragEnd: (details) async {
+            final seekPosition = _seekPositionNotifier.value;
+            if (seekPosition != null && !_isSeeking) {
+              _isSeeking = true;
+              try {
+                await maProvider.seek(playerId, seekPosition.round());
+                // Wait for server to process seek before allowing another
+                await Future.delayed(const Duration(milliseconds: 1500));
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(S.of(context)!.errorSeeking(e.toString()))),
+                  );
+                }
+              } finally {
+                _isSeeking = false;
+                if (mounted) {
+                  _seekPositionNotifier.value = null;
+                }
+              }
+            }
+          },
+          onTapUp: (details) async {
+            if (_isSeeking) return; // Ignore if already seeking
+
+            // Calculate position from tap location
+            final newProgress = (details.localPosition.dx / width).clamp(0.0, 1.0);
+            final seekPosition = newProgress * maxProgress;
+            _seekPositionNotifier.value = seekPosition;
+            _isSeeking = true;
+
+            try {
+              await maProvider.seek(playerId, seekPosition.round());
+              // Wait for server to process seek before allowing another
+              await Future.delayed(const Duration(milliseconds: 1500));
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(S.of(context)!.errorSeeking(e.toString()))),
+                );
+              }
+            } finally {
+              _isSeeking = false;
+              if (mounted) {
+                _seekPositionNotifier.value = null;
+              }
+            }
+          },
+          child: SizedBox(
+            height: 48,
+            child: Center(
+              child: SizedBox(
+                height: 20,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Inactive track (full width, thinner)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 8.5,
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: inactiveColor,
+                          borderRadius: BorderRadius.circular(1.5),
+                        ),
+                      ),
+                    ),
+                    // Active track
+                    Positioned(
+                      left: 0,
+                      top: 7,
+                      child: Container(
+                        width: width * progress,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: activeColor,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                    // Thumb
+                    Positioned(
+                      left: (width * progress) - 7,
+                      top: 3,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: activeColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

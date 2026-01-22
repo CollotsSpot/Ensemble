@@ -1502,8 +1502,8 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
                                   controller: _pageController,
                                   onPageChanged: _onPageChanged,
                                   itemCount: _tabCount,
-                                  // Faster settling so vertical scroll works sooner after swipe
-                                  physics: const _FastPageScrollPhysics(),
+                                  // Use default physics - custom physics may cause issues with Flutter 3.38
+                                  physics: const PageScrollPhysics(),
                                   itemBuilder: (context, index) => _buildTabAtIndex(context, l10n, index),
                                 ),
                               ),
@@ -4708,9 +4708,9 @@ class _FastPageScrollPhysics extends PageScrollPhysics {
 
   @override
   SpringDescription get spring => const SpringDescription(
-    mass: 50,      // Lower mass = faster movement
-    stiffness: 500, // Higher stiffness = snappier
-    damping: 1.0,   // Critical damping for no overshoot
+    mass: 80,       // Increased mass for more controlled movement
+    stiffness: 100, // Reduced stiffness to prevent over-snapping
+    damping: 1.2,   // Slightly over-damped to prevent overshoot
   );
 }
 
