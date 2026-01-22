@@ -72,10 +72,7 @@ jobs:
           EOF
 
       - name: Build APK
-        run: |
-          mkdir -p ~/.gradle
-          cp android/init.gradle ~/.gradle/init.gradle
-          flutter build apk --release
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
