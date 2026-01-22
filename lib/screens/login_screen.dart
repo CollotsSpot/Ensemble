@@ -456,6 +456,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (provider.isConnected) {
+        // Clear remote access ID since this is a direct/local connection
+        await SettingsService.clearRemoteAccessId();
+
         // For first-time users, wait for player selection so the welcome
         // overlay can appear immediately without home screen flash.
         // This matches the logic in AppStartup._checkAndConnect().
@@ -553,7 +556,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (provider.isConnected) {
         _addDebugLog('Connected successfully via remote bridge');
 
-        // Save credentials for future auto-login
+        // Save remote access ID and credentials for future auto-reconnect
+        await SettingsService.setRemoteAccessId(remoteId);
         await SettingsService.setUsername(username);
         await SettingsService.setPassword(password);
 

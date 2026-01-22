@@ -24,6 +24,7 @@ import '../services/position_tracker.dart';
 import '../services/sendspin_service.dart';
 import '../services/pcm_audio_player.dart';
 import '../services/offline_action_queue.dart';
+import '../services/remote/remote_bridge.dart';
 import '../constants/timings.dart';
 import '../services/database_service.dart';
 import '../main.dart' show audioHandler;
@@ -110,6 +111,9 @@ class MusicAssistantProvider with ChangeNotifier {
 
   // Remote cloud URL for Sendspin connection (e.g., xxxxxxxx.ui.nabu.casa)
   String? _remoteCloudUrl;
+
+  // Remote bridge for WebRTC tunnel (kept alive for reconnection)
+  RemoteBridge? _remoteBridge;
 
   // PCM audio player for raw Sendspin audio streaming
   PcmAudioPlayer? _pcmAudioPlayer;
@@ -826,8 +830,60 @@ class MusicAssistantProvider with ChangeNotifier {
 
     if (_serverUrl != null && _serverUrl!.isNotEmpty) {
       await _restoreAuthCredentials();
-      await connectToServer(_serverUrl!);
+
+      // Check if this is a localhost bridge URL that needs remote reconnection
+      final remoteAccessId = await SettingsService.getRemoteAccessId();
+      final isLocalhostUrl = _serverUrl!.contains('localhost') || _serverUrl!.contains('127.0.0.1');
+
+      if (isLocalhostUrl && remoteAccessId != null && remoteAccessId.isNotEmpty) {
+        // This is a remote connection - need to re-establish bridge
+        _logger.log('🌐 Detected remote mode, re-establishing bridge for: $remoteAccessId');
+        await _reconnectViaRemoteBridge(remoteAccessId);
+      } else {
+        // Direct/local connection
+        await connectToServer(_serverUrl!);
+      }
+
       await _initializeLocalPlayback();
+    }
+  }
+
+  /// Re-establish remote bridge connection on app restart
+  Future<void> _reconnectViaRemoteBridge(String remoteAccessId) async {
+    final username = await SettingsService.getUsername();
+    final password = await SettingsService.getPassword();
+
+    if (username == null || password == null) {
+      _logger.log('❌ Remote reconnect failed: no credentials saved');
+      // Clear remote access ID since we can't reconnect
+      await SettingsService.clearRemoteAccessId();
+      return;
+    }
+
+    _logger.log('🔄 Starting remote bridge for reconnection...');
+
+    try {
+      _remoteBridge = RemoteBridge();
+      final port = await _remoteBridge!.start(remoteAccessId, username, password);
+
+      if (port == null) {
+        _logger.log('❌ Remote bridge failed to start');
+        // Clear remote access ID since bridge failed
+        await SettingsService.clearRemoteAccessId();
+        return;
+      }
+
+      _logger.log('✅ Remote bridge started on port $port');
+
+      // Update server URL to the new bridge port
+      final bridgeUrl = 'ws://localhost:$port';
+      await SettingsService.setServerUrl(bridgeUrl);
+
+      // Connect through the bridge
+      await connectToServer(bridgeUrl, isRemoteMode: true, remoteCloudUrl: remoteAccessId);
+    } catch (e) {
+      _logger.log('❌ Remote reconnect error: $e');
+      await SettingsService.clearRemoteAccessId();
     }
   }
 

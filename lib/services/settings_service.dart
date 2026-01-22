@@ -73,6 +73,7 @@ class SettingsService {
   static const String _keyServerUrl = 'server_url';
   static const String _keyAuthServerUrl = 'auth_server_url';
   static const String _keyWebSocketPort = 'websocket_port';
+  static const String _keyRemoteAccessId = 'remote_access_id'; // MA Remote Access ID for WebRTC
   static const String _keyAuthToken = 'auth_token';
   static const String _keyMaAuthToken = 'ma_auth_token'; // Music Assistant native auth token
   static const String _keyAuthCredentials = 'auth_credentials'; // NEW: Serialized auth strategy credentials
@@ -191,6 +192,26 @@ class SettingsService {
   static Future<void> clearServerUrl() async {
     final prefs = await _getPrefs();
     await prefs.remove(_keyServerUrl);
+  }
+
+  // Remote Access ID for WebRTC-based remote connections
+  static Future<String?> getRemoteAccessId() async {
+    final prefs = await _getPrefs();
+    return prefs.getString(_keyRemoteAccessId);
+  }
+
+  static Future<void> setRemoteAccessId(String? id) async {
+    final prefs = await _getPrefs();
+    if (id == null || id.isEmpty) {
+      await prefs.remove(_keyRemoteAccessId);
+    } else {
+      await prefs.setString(_keyRemoteAccessId, id);
+    }
+  }
+
+  static Future<void> clearRemoteAccessId() async {
+    final prefs = await _getPrefs();
+    await prefs.remove(_keyRemoteAccessId);
   }
 
   // Get authentication server URL (returns null if not set, meaning use server URL)
