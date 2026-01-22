@@ -30,6 +30,16 @@ class RemoteBridge {
   StreamSubscription? _sendspinBinarySubscription;
 
   Timer? _healthCheckTimer;
+  Timer? _reconnectTimer;
+
+  // Connection parameters for reconnection
+  String? _remoteId;
+  String? _username;
+  String? _password;
+  bool _isReconnecting = false;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 5;
+  static const Duration _reconnectDelay = Duration(seconds: 3);
 
   // Cached server hello to replay when WS client connects
   String? _cachedServerHello;
@@ -46,11 +56,18 @@ class RemoteBridge {
   int? get port => _port;
   bool get isRunning => _server != null;
   bool get isSendspinReady => _webrtcConnection?.isSendspinConnected ?? false;
+  bool get isWebRTCConnected => _webrtcConnection?.isConnected ?? false;
 
   /// Start the bridge and connect to the remote MA server.
   /// Returns the local port number to connect to, or null if failed.
   Future<int?> start(String remoteId, String username, String password) async {
     _logger.log('RemoteBridge: Starting bridge for remote ID: $remoteId');
+
+    // Store connection parameters for reconnection
+    _remoteId = remoteId;
+    _username = username;
+    _password = password;
+    _reconnectAttempts = 0;
 
     try {
       // Step 1: Connect to MA via WebRTC
@@ -307,17 +324,144 @@ class RemoteBridge {
     );
   }
 
-  /// Handle WebRTC disconnection.
+  /// Handle WebRTC disconnection - attempt reconnection.
   void _handleWebRTCDisconnection() {
-    _logger.log('RemoteBridge: WebRTC disconnected, closing all WS clients');
+    _logger.log('RemoteBridge: WebRTC disconnected');
 
-    // Close API client
+    // Don't close WS clients immediately - they will reconnect when WebRTC is back
+    // Instead, attempt to reconnect WebRTC
+    _scheduleReconnect();
+  }
+
+  /// Schedule a WebRTC reconnection attempt.
+  void _scheduleReconnect() {
+    if (_isReconnecting) {
+      _logger.log('RemoteBridge: Already reconnecting, skipping');
+      return;
+    }
+
+    if (_remoteId == null || _username == null || _password == null) {
+      _logger.log('RemoteBridge: No connection parameters, cannot reconnect');
+      _closeAllClients();
+      return;
+    }
+
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      _logger.log('RemoteBridge: Max reconnect attempts reached, giving up');
+      _closeAllClients();
+      return;
+    }
+
+    _reconnectAttempts++;
+    final delay = _reconnectDelay * _reconnectAttempts; // Exponential backoff
+    _logger.log('RemoteBridge: Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s');
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, _reconnectWebRTC);
+  }
+
+  /// Attempt to reconnect WebRTC.
+  Future<void> _reconnectWebRTC() async {
+    if (_isReconnecting) return;
+    _isReconnecting = true;
+
+    _logger.log('RemoteBridge: Attempting WebRTC reconnection...');
+
+    try {
+      // Clean up old WebRTC connection
+      _apiWebrtcSubscription?.cancel();
+      _sendspinTextSubscription?.cancel();
+      _sendspinBinarySubscription?.cancel();
+      await _webrtcConnection?.disconnect();
+
+      // Create new WebRTC connection
+      _webrtcConnection = WebRTCConnection();
+
+      _webrtcConnection!.onStateChanged = (state) {
+        _logger.log('RemoteBridge: WebRTC state (reconnect): $state');
+        if (state == WebRTCConnectionState.disconnected ||
+            state == WebRTCConnectionState.failed) {
+          _isReconnecting = false;
+          _handleWebRTCDisconnection();
+        } else if (state == WebRTCConnectionState.connected) {
+          _reconnectAttempts = 0; // Reset on successful connection
+        }
+      };
+
+      _webrtcConnection!.onError = (error) {
+        _logger.log('RemoteBridge: WebRTC error (reconnect): $error');
+      };
+
+      final connected = await _webrtcConnection!.connect(_remoteId!);
+      if (!connected) {
+        _logger.log('RemoteBridge: WebRTC reconnection failed');
+        _isReconnecting = false;
+        _scheduleReconnect();
+        return;
+      }
+
+      _logger.log('RemoteBridge: WebRTC reconnected, re-authenticating...');
+
+      // Re-authenticate
+      final authenticated = await _authenticate(_username!, _password!);
+      if (!authenticated) {
+        _logger.log('RemoteBridge: Re-authentication failed');
+        _isReconnecting = false;
+        _scheduleReconnect();
+        return;
+      }
+
+      _logger.log('RemoteBridge: Re-authentication successful');
+
+      // Re-cache server hello
+      if (_webrtcConnection!.serverInfo != null) {
+        _cachedServerHello = jsonEncode(_webrtcConnection!.serverInfo);
+        _logger.log('RemoteBridge: Re-cached server hello');
+      }
+
+      // Re-subscribe to WebRTC streams
+      _apiWebrtcSubscription = _webrtcConnection!.rawMessages.listen((message) {
+        _apiMessagesReceived++;
+        _lastMessageReceived = DateTime.now();
+        if (_apiClientSocket != null) {
+          _apiClientSocket!.add(message);
+        }
+      });
+
+      _sendspinTextSubscription = _webrtcConnection!.sendspinTextMessages.listen((message) {
+        _sendspinMessagesReceived++;
+        _lastMessageReceived = DateTime.now();
+        if (_sendspinClientSocket != null) {
+          _sendspinClientSocket!.add(message);
+        }
+      });
+
+      _sendspinBinarySubscription = _webrtcConnection!.sendspinBinaryMessages.listen((data) {
+        _sendspinMessagesReceived++;
+        if (_sendspinClientSocket != null) {
+          _sendspinClientSocket!.add(data);
+        }
+      });
+
+      _logger.log('RemoteBridge: ✅ WebRTC reconnection complete');
+      _isReconnecting = false;
+      _reconnectAttempts = 0;
+    } catch (e) {
+      _logger.log('RemoteBridge: Reconnection error: $e');
+      _isReconnecting = false;
+      _scheduleReconnect();
+    }
+  }
+
+  /// Close all WS clients (called when giving up on reconnection).
+  void _closeAllClients() {
+    _logger.log('RemoteBridge: Closing all WS clients');
+
     _apiClientSocket?.close();
     _apiClientSocket = null;
     _apiClientSubscription?.cancel();
     _apiClientSubscription = null;
 
-    // Close Sendspin client
     _sendspinClientSocket?.close();
     _sendspinClientSocket = null;
     _sendspinClientSubscription?.cancel();
@@ -344,6 +488,12 @@ class RemoteBridge {
   /// Stop the bridge and disconnect from the remote server.
   Future<void> stop() async {
     _logger.log('RemoteBridge: Stopping bridge');
+
+    // Cancel reconnection
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _isReconnecting = false;
+    _reconnectAttempts = 0;
 
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
@@ -376,6 +526,11 @@ class RemoteBridge {
     _webrtcConnection = null;
 
     _cachedServerHello = null;
+
+    // Clear connection parameters
+    _remoteId = null;
+    _username = null;
+    _password = null;
 
     _logger.log('RemoteBridge: Bridge stopped');
   }

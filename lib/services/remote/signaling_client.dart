@@ -236,7 +236,8 @@ class SignalingClient {
 
   void _startPingTimer() {
     _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Send ping every 15 seconds to keep connection alive
+    _pingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _send({'type': SignalingMessageType.ping});
     });
   }
