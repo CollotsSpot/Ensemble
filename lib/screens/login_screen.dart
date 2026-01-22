@@ -5,10 +5,11 @@ import '../services/settings_service.dart';
 import '../services/database_service.dart';
 import '../services/profile_service.dart';
 import '../services/auth/auth_strategy.dart';
-import '../services/debug_logger.dart';
 import '../widgets/debug/debug_console.dart';
 import '../l10n/app_localizations.dart';
 import 'home_screen.dart';
+
+enum ConnectionMode { local, remote }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,8 +25,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _authServerUrlController = TextEditingController(); // For separate auth server (Authelia)
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _remoteIdController = TextEditingController(); // Remote Access ID
   final FocusNode _usernameFocusNode = FocusNode();
 
+  ConnectionMode _connectionMode = ConnectionMode.local;
   bool _isConnecting = false;
   bool _isDetectingAuth = false;
   AuthStrategy? _detectedAuthStrategy;
@@ -74,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _authServerUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _remoteIdController.dispose();
     _usernameFocusNode.dispose();
     super.dispose();
   }
@@ -477,6 +481,68 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _connectRemote() async {
+    final remoteId = _remoteIdController.text.trim();
+    if (remoteId.isEmpty) {
+      setState(() {
+        _error = 'Please enter a Remote Access ID';
+      });
+      return;
+    }
+
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (username.isEmpty || password.isEmpty) {
+      setState(() {
+        _error = S.of(context)!.pleaseEnterCredentials;
+      });
+      return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _error = null;
+    });
+
+    _addDebugLog('Connecting to remote server: $remoteId');
+
+    try {
+      final provider = context.read<MusicAssistantProvider>();
+
+      // Connect via remote access
+      final success = await provider.connectRemote(remoteId, username, password);
+
+      if (success) {
+        _addDebugLog('Remote connection successful');
+
+        // Save credentials for future use
+        await SettingsService.setRemoteAccessId(remoteId);
+        await SettingsService.setUsername(username);
+        await SettingsService.setPassword(password);
+
+        // Navigate to home screen
+        if (mounted) {
+          FocusScope.of(context).unfocus();
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      } else {
+        setState(() {
+          _error = 'Remote connection failed. Check your credentials and Remote Access ID.';
+          _isConnecting = false;
+        });
+      }
+    } catch (e) {
+      _addDebugLog('Remote connection error: $e');
+      setState(() {
+        _error = 'Connection failed: ${e.toString()}';
+        _isConnecting = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -509,8 +575,160 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
 
+              // Connection mode selector
+              SegmentedButton<ConnectionMode>(
+                segments: [
+                  ButtonSegment<ConnectionMode>(
+                    value: ConnectionMode.local,
+                    label: Text('Local'),
+                    icon: Icon(Icons.home_rounded),
+                  ),
+                  ButtonSegment<ConnectionMode>(
+                    value: ConnectionMode.remote,
+                    label: Text('Remote'),
+                    icon: Icon(Icons.cloud_rounded),
+                  ),
+                ],
+                selected: {_connectionMode},
+                onSelectionChanged: _isConnecting || _isDetectingAuth
+                    ? null
+                    : (Set<ConnectionMode> selection) {
+                        setState(() {
+                          _connectionMode = selection.first;
+                          _error = null;
+                          _detectedAuthStrategy = null;
+                          _detectedAuthType = null;
+                        });
+                      },
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return colorScheme.primaryContainer;
+                    }
+                    return colorScheme.surfaceVariant.withOpacity(0.3);
+                  }),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Remote Access UI
+              if (_connectionMode == ConnectionMode.remote) ...[
+                Text(
+                  'Remote Access ID',
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onBackground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Find this in Music Assistant Settings → Remote Access',
+                  style: TextStyle(
+                    color: colorScheme.onBackground.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _remoteIdController,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: 'XXXX-XXXX-XXXX-XXXX',
+                    hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.vpn_key_rounded,
+                      color: colorScheme.onSurface.withOpacity(0.54),
+                    ),
+                  ),
+                  enabled: !_isConnecting,
+                  textCapitalization: TextCapitalization.characters,
+                  textInputAction: TextInputAction.next,
+                ),
+
+                const SizedBox(height: 24),
+
+                // Username
+                Text(
+                  S.of(context)!.username,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onBackground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _usernameController,
+                  focusNode: _usernameFocusNode,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: S.of(context)!.username,
+                    hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.person_rounded,
+                      color: colorScheme.onSurface.withOpacity(0.54),
+                    ),
+                  ),
+                  enabled: !_isConnecting,
+                  textInputAction: TextInputAction.next,
+                ),
+
+                const SizedBox(height: 16),
+
+                // Password
+                Text(
+                  S.of(context)!.password,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onBackground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _passwordController,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: S.of(context)!.password,
+                    hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.lock_rounded,
+                      color: colorScheme.onSurface.withOpacity(0.54),
+                    ),
+                  ),
+                  obscureText: true,
+                  enabled: !_isConnecting,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _connectRemote(),
+                ),
+
+                const SizedBox(height: 24),
+              ],
+
+              // Local connection UI
+              if (_connectionMode == ConnectionMode.local) ...[
               // Server URL
               Text(
                 S.of(context)!.serverAddress,
@@ -856,6 +1074,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
               ],
+              ], // End of local connection UI
 
               const SizedBox(height: 16),
 
@@ -898,11 +1117,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
               ],
 
-              // Connect button (changes based on state)
+              // Connect button (changes based on state and mode)
               ElevatedButton(
                 onPressed: (_isConnecting || _isDetectingAuth)
                     ? null
-                    : (_detectedAuthStrategy == null ? _detectAuthRequirements : _connect),
+                    : _connectionMode == ConnectionMode.remote
+                        ? _connectRemote
+                        : (_detectedAuthStrategy == null ? _detectAuthRequirements : _connect),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
@@ -944,7 +1165,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           )
                         : Text(
-                            _detectedAuthStrategy == null ? S.of(context)!.detectAndConnect : S.of(context)!.connect,
+                            _connectionMode == ConnectionMode.remote
+                                ? S.of(context)!.connect
+                                : (_detectedAuthStrategy == null ? S.of(context)!.detectAndConnect : S.of(context)!.connect),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

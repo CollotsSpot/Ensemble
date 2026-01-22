@@ -178,6 +178,9 @@ class SettingsService {
   // Podcast Cover Cache (iTunes URLs for high-res artwork)
   static const String _keyPodcastCoverCache = 'podcast_cover_cache';
 
+  // Remote Access Settings
+  static const String _keyRemoteAccessId = 'remote_access_id';
+
   static Future<String?> getServerUrl() async {
     final prefs = await _getPrefs();
     return prefs.getString(_keyServerUrl);
@@ -263,6 +266,22 @@ class SettingsService {
   // Clear authentication credentials
   static Future<void> clearAuthCredentials() async {
     await SecureStorageService.clearAuthCredentials();
+  }
+
+  // Get Remote Access ID for remote connections
+  static Future<String?> getRemoteAccessId() async {
+    final prefs = await _getPrefs();
+    return prefs.getString(_keyRemoteAccessId);
+  }
+
+  // Set Remote Access ID for remote connections
+  static Future<void> setRemoteAccessId(String? id) async {
+    final prefs = await _getPrefs();
+    if (id == null || id.isEmpty) {
+      await prefs.remove(_keyRemoteAccessId);
+    } else {
+      await prefs.setString(_keyRemoteAccessId, id);
+    }
   }
 
   // Get username for authentication

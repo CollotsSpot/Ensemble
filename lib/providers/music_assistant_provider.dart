@@ -24,6 +24,7 @@ import '../services/position_tracker.dart';
 import '../services/sendspin_service.dart';
 import '../services/pcm_audio_player.dart';
 import '../services/offline_action_queue.dart';
+import '../services/remote/remote_bridge.dart';
 import '../constants/timings.dart';
 import '../services/database_service.dart';
 import '../main.dart' show audioHandler;
@@ -104,6 +105,10 @@ class MusicAssistantProvider with ChangeNotifier {
   // Sendspin service (MA 2.7.0b20+ replacement for builtin_player)
   SendspinService? _sendspinService;
   bool _sendspinConnected = false;
+
+  // Remote connection (WebRTC-to-WS bridge for remote access)
+  RemoteBridge? _remoteBridge;
+  bool get isRemoteConnection => _remoteBridge != null && _remoteBridge!.isRunning;
 
   // PCM audio player for raw Sendspin audio streaming
   PcmAudioPlayer? _pcmAudioPlayer;
@@ -1125,6 +1130,61 @@ class MusicAssistantProvider with ChangeNotifier {
     }
   }
 
+  /// Connect to a remote MA server via WebRTC using Remote Access ID.
+  /// Uses a WebRTC-to-WebSocket bridge so MusicAssistantAPI works unchanged.
+  Future<bool> connectRemote(String remoteId, String username, String password) async {
+    _logger.log('🌐 Attempting remote connection to: $remoteId');
+
+    try {
+      _error = null;
+      _connectionState = MAConnectionState.connecting;
+      notifyListeners();
+
+      // Start the WebRTC-to-WS bridge
+      _remoteBridge = RemoteBridge();
+      final port = await _remoteBridge!.start(remoteId, username, password);
+
+      if (port == null) {
+        _logger.log('❌ Remote bridge failed to start');
+        _remoteBridge = null;
+        _connectionState = MAConnectionState.error;
+        _error = 'Remote connection failed';
+        notifyListeners();
+        return false;
+      }
+
+      _logger.log('✅ Remote bridge started on port $port');
+
+      // Connect via normal API - it will hit the local bridge
+      // The bridge already authenticated, so we use the same credentials
+      await SettingsService.setUsername(username);
+      await SettingsService.setPassword(password);
+
+      await connectToServer('ws://localhost:$port');
+
+      // Wait a moment for connection to establish
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (isConnected) {
+        _logger.log('✅ Remote connection via bridge successful!');
+        return true;
+      } else {
+        _logger.log('❌ Connection to bridge failed, stopping bridge');
+        await _remoteBridge?.stop();
+        _remoteBridge = null;
+        return false;
+      }
+    } catch (e) {
+      _logger.log('❌ Remote connection error: $e');
+      await _remoteBridge?.stop();
+      _remoteBridge = null;
+      _error = e.toString();
+      _connectionState = MAConnectionState.error;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> _handleMaAuthentication() async {
     if (_api == null) return false;
 
@@ -1816,6 +1876,11 @@ class MusicAssistantProvider with ChangeNotifier {
       _sendspinConnected = false;
     }
     await _api?.disconnect();
+    // Stop remote bridge if running
+    if (_remoteBridge != null) {
+      await _remoteBridge!.stop();
+      _remoteBridge = null;
+    }
     _connectionState = MAConnectionState.disconnected;
     // DON'T clear caches or player state - keep for instant reconnect
     _logger.log('📡 Explicit disconnect - keeping cached data for instant resume');

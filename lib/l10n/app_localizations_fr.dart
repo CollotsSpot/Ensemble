@@ -1,5 +1,5 @@
+// ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -39,7 +39,8 @@ class SFr extends S {
   String get portHint => 'ex., 8095 ou laisser vide';
 
   @override
-  String get portDescription => 'Laisser vide pour les proxys inverses ou les ports standards. Entrer 8095 pour une connexion directe.';
+  String get portDescription =>
+      'Laisser vide pour les proxys inverses ou les ports standards. Entrer 8095 pour une connexion directe.';
 
   @override
   String get username => 'Nom d\'utilisateur';
@@ -60,10 +61,12 @@ class SFr extends S {
   String get authServerUrlOptional => 'URL du serveur d\'auth (Facultatif)';
 
   @override
-  String get authServerUrlHint => 'ex., auth.example.com (si different du serveur)';
+  String get authServerUrlHint =>
+      'ex., auth.example.com (si different du serveur)';
 
   @override
-  String get authServerUrlDescription => 'Laisser vide si l\'authentification est sur le meme serveur';
+  String get authServerUrlDescription =>
+      'Laisser vide si l\'authentification est sur le meme serveur';
 
   @override
   String detectedAuthType(String authType) {
@@ -80,40 +83,50 @@ class SFr extends S {
   String get unencryptedConnection => 'Connexion non chiffrée';
 
   @override
-  String get usingHttpOverTailscale => 'Utilisation de HTTP via Tailscale (tunnel chiffre)';
+  String get usingHttpOverTailscale =>
+      'Utilisation de HTTP via Tailscale (tunnel chiffre)';
 
   @override
-  String get httpsFailedUsingHttp => 'HTTPS a échoué, utilisation de HTTP en repli';
+  String get httpsFailedUsingHttp =>
+      'HTTPS a échoué, utilisation de HTTP en repli';
 
   @override
-  String get httpNotEncrypted => 'Connexion HTTP - les donnees ne sont pas chiffrées';
+  String get httpNotEncrypted =>
+      'Connexion HTTP - les donnees ne sont pas chiffrées';
 
   @override
-  String get pleaseEnterServerAddress => 'Veuillez entrer l\'adresse de votre serveur Music Assistant';
+  String get pleaseEnterServerAddress =>
+      'Veuillez entrer l\'adresse de votre serveur Music Assistant';
 
   @override
   String get pleaseEnterName => 'Veuillez entrer votre nom';
 
   @override
-  String get pleaseEnterValidPort => 'Veuillez entrer un numero de port valide (1-65535)';
+  String get pleaseEnterValidPort =>
+      'Veuillez entrer un numero de port valide (1-65535)';
 
   @override
-  String get pleaseEnterCredentials => 'Veuillez entrer le nom d\'utilisateur et le mot de passe';
+  String get pleaseEnterCredentials =>
+      'Veuillez entrer le nom d\'utilisateur et le mot de passe';
 
   @override
-  String get authFailed => 'Echec de l\'authentification. Veuillez verifier vos identifiants.';
+  String get authFailed =>
+      'Echec de l\'authentification. Veuillez verifier vos identifiants.';
 
   @override
-  String get maLoginFailed => 'Echec de la connexion a Music Assistant. Veuillez verifier vos identifiants.';
+  String get maLoginFailed =>
+      'Echec de la connexion a Music Assistant. Veuillez verifier vos identifiants.';
 
   @override
-  String get connectionFailed => 'Impossible de se connecter au serveur. Veuillez verifier l\'adresse et reessayer.';
+  String get connectionFailed =>
+      'Impossible de se connecter au serveur. Veuillez verifier l\'adresse et reessayer.';
 
   @override
   String get detectingAuth => 'Detection de l\'authentification...';
 
   @override
-  String get cannotDetermineAuth => 'Impossible de determiner les exigences d\'authentification. Veuillez verifier l\'URL du serveur.';
+  String get cannotDetermineAuth =>
+      'Impossible de determiner les exigences d\'authentification. Veuillez verifier l\'URL du serveur.';
 
   @override
   String get noAuthentication => 'Pas d\'authentification';
@@ -128,7 +141,8 @@ class SFr extends S {
   String get musicAssistantLogin => 'Connexion Music Assistant';
 
   @override
-  String get pressBackToMinimize => 'Appuyez a nouveau sur retour pour minimiser';
+  String get pressBackToMinimize =>
+      'Appuyez a nouveau sur retour pour minimiser';
 
   @override
   String get recentlyPlayed => 'Ecoutes recemment';
@@ -221,10 +235,12 @@ class SFr extends S {
   String get noRadioStations => 'Aucune station de radio';
 
   @override
-  String get addRadioStationsHint => 'Ajouter des stations de radio dans Music Assistant';
+  String get addRadioStationsHint =>
+      'Ajouter des stations de radio dans Music Assistant';
 
   @override
-  String get searchFailed => 'La recherche a échoué. Veuillez verifier votre connexion.';
+  String get searchFailed =>
+      'La recherche a échoué. Veuillez verifier votre connexion.';
 
   @override
   String get queue => 'File d\'attente';
@@ -264,7 +280,8 @@ class SFr extends S {
   String get system => 'Système';
 
   @override
-  String get pullToRefresh => 'Tirez pour rafraichir la bibliothèque et appliquer les modifications';
+  String get pullToRefresh =>
+      'Tirez pour rafraichir la bibliothèque et appliquer les modifications';
 
   @override
   String get viewDebugLogs => 'Voir les journaux de debogage';
@@ -301,7 +318,8 @@ class SFr extends S {
   String get logsCleared => 'Journaux effaces';
 
   @override
-  String get playerListCopied => 'Liste des lecteurs copiee dans le presse-papiers !';
+  String get playerListCopied =>
+      'Liste des lecteurs copiee dans le presse-papiers !';
 
   @override
   String get noLogsYet => 'Pas encore de journaux';
@@ -471,37 +489,43 @@ class SFr extends S {
   String get noFavoriteAudiobooks => 'Aucun livre audio favori';
 
   @override
-  String get tapHeartAudiobook => 'Appuyez sur le coeur d\'un livre audio pour l\'ajoutér aux favoris';
+  String get tapHeartAudiobook =>
+      'Appuyez sur le coeur d\'un livre audio pour l\'ajoutér aux favoris';
 
   @override
   String get noAudiobooks => 'Aucun livre audio';
 
   @override
-  String get addAudiobooksHint => 'Ajoutez des livres audio a votre bibliothèque pour les voir ici';
+  String get addAudiobooksHint =>
+      'Ajoutez des livres audio a votre bibliothèque pour les voir ici';
 
   @override
   String get noFavoriteArtists => 'Aucun artiste favori';
 
   @override
-  String get tapHeartArtist => 'Appuyez sur le coeur d\'un artiste pour l\'ajoutér aux favoris';
+  String get tapHeartArtist =>
+      'Appuyez sur le coeur d\'un artiste pour l\'ajoutér aux favoris';
 
   @override
   String get noFavoriteAlbums => 'Aucun album favori';
 
   @override
-  String get tapHeartAlbum => 'Appuyez sur le coeur d\'un album pour l\'ajoutér aux favoris';
+  String get tapHeartAlbum =>
+      'Appuyez sur le coeur d\'un album pour l\'ajoutér aux favoris';
 
   @override
   String get noFavoritePlaylists => 'Aucune playlist favorite';
 
   @override
-  String get tapHeartPlaylist => 'Appuyez sur le coeur d\'une playlist pour l\'ajoutér aux favoris';
+  String get tapHeartPlaylist =>
+      'Appuyez sur le coeur d\'une playlist pour l\'ajoutér aux favoris';
 
   @override
   String get noFavoriteTracks => 'Aucune piste favorite';
 
   @override
-  String get longPressTrackHint => 'Appuyez longuement sur une piste et touchez le coeur pour l\'ajoutér aux favoris';
+  String get longPressTrackHint =>
+      'Appuyez longuement sur une piste et touchez le coeur pour l\'ajoutér aux favoris';
 
   @override
   String get loadSeries => 'Charger les séries';
@@ -513,7 +537,8 @@ class SFr extends S {
   String get notConnectedTitle => 'Not Connected';
 
   @override
-  String get connectHint => 'Connectéz-vous a votre serveur Music Assistant pour commencer a écouter';
+  String get connectHint =>
+      'Connectéz-vous a votre serveur Music Assistant pour commencer a écouter';
 
   @override
   String get configureServer => 'Configurer le serveur';
@@ -549,7 +574,8 @@ class SFr extends S {
   String get noLogsToCopy => 'Aucun journal a copier';
 
   @override
-  String get noDebugLogsYet => 'Pas encore de journaux de debogage. Essayez de détectér l\'authentification.';
+  String get noDebugLogsYet =>
+      'Pas encore de journaux de debogage. Essayez de détectér l\'authentification.';
 
   @override
   String get showDebug => 'Afficher le debogage';
@@ -564,7 +590,8 @@ class SFr extends S {
   String get noChapters => 'Aucun chapitre';
 
   @override
-  String get noChapterInfo => 'Ce livre audio n\'a pas d\'informations de chapitre';
+  String get noChapterInfo =>
+      'Ce livre audio n\'a pas d\'informations de chapitre';
 
   @override
   String errorSeeking(String error) {
@@ -637,10 +664,12 @@ class SFr extends S {
   String get artist => 'Artiste';
 
   @override
-  String get showRecentlyPlayedAlbums => 'Afficher les albums écoutes recemment';
+  String get showRecentlyPlayedAlbums =>
+      'Afficher les albums écoutes recemment';
 
   @override
-  String get showRandomArtists => 'Afficher des artistes aléatoires a découvrir';
+  String get showRandomArtists =>
+      'Afficher des artistes aléatoires a découvrir';
 
   @override
   String get showRandomAlbums => 'Afficher des albums aléatoires a découvrir';
@@ -649,34 +678,43 @@ class SFr extends S {
   String get showAudiobooksInProgress => 'Afficher les livres audio en cours';
 
   @override
-  String get showRandomAudiobooks => 'Afficher des livres audio aléatoires a découvrir';
+  String get showRandomAudiobooks =>
+      'Afficher des livres audio aléatoires a découvrir';
 
   @override
-  String get showRandomSeries => 'Afficher des séries de livres audio aléatoires a découvrir';
+  String get showRandomSeries =>
+      'Afficher des séries de livres audio aléatoires a découvrir';
 
   @override
   String get showFavoriteAlbums => 'Afficher une rangee de vos albums favoris';
 
   @override
-  String get showFavoriteArtists => 'Afficher une rangee de vos artistes favoris';
+  String get showFavoriteArtists =>
+      'Afficher une rangee de vos artistes favoris';
 
   @override
-  String get showFavoriteTracks => 'Afficher une rangee de vos pistes favorites';
+  String get showFavoriteTracks =>
+      'Afficher une rangee de vos pistes favorites';
 
   @override
-  String get showFavoritePlaylists => 'Afficher une rangee de vos playlists favorites';
+  String get showFavoritePlaylists =>
+      'Afficher une rangee de vos playlists favorites';
 
   @override
-  String get showFavoriteRadioStations => 'Afficher une rangee de vos stations de radio favorites';
+  String get showFavoriteRadioStations =>
+      'Afficher une rangee de vos stations de radio favorites';
 
   @override
-  String get showFavoritePodcasts => 'Afficher une rangee de vos podcasts favoris';
+  String get showFavoritePodcasts =>
+      'Afficher une rangee de vos podcasts favoris';
 
   @override
-  String get extractColorsFromArtwork => 'Extraire les couleurs des pochettes d\'albums et d\'artistes';
+  String get extractColorsFromArtwork =>
+      'Extraire les couleurs des pochettes d\'albums et d\'artistes';
 
   @override
-  String get chooseHomeScreenRows => 'Choisir les rangees a afficher sur l\'ecran d\'accueil';
+  String get chooseHomeScreenRows =>
+      'Choisir les rangees a afficher sur l\'ecran d\'accueil';
 
   @override
   String get addedToFavorites => 'Ajoute aux favoris';
@@ -721,13 +759,15 @@ class SFr extends S {
   String get podcasts => 'Podcasts';
 
   @override
-  String get podcastSupportComingSoon => 'Prise en charge des podcasts bientot disponible';
+  String get podcastSupportComingSoon =>
+      'Prise en charge des podcasts bientot disponible';
 
   @override
   String get noPodcasts => 'Aucun podcast';
 
   @override
-  String get addPodcastsHint => 'Abonnez-vous a des podcasts dans Music Assistant';
+  String get addPodcastsHint =>
+      'Abonnez-vous a des podcasts dans Music Assistant';
 
   @override
   String get episodes => 'Episodes';
@@ -774,7 +814,8 @@ class SFr extends S {
   String get loadingChapters => 'Chargement des chapitres...';
 
   @override
-  String get noChapterInfoAvailable => 'Aucune information de chapitre disponible';
+  String get noChapterInfoAvailable =>
+      'Aucune information de chapitre disponible';
 
   @override
   String percentComplete(int percent) {
@@ -785,13 +826,15 @@ class SFr extends S {
   String get theAudioDbApiKey => 'Cle API TheAudioDB';
 
   @override
-  String get theAudioDbApiKeyHint => 'Utilisez \"2\" pour le niveau gratuit ou une cle premium';
+  String get theAudioDbApiKeyHint =>
+      'Utilisez \"2\" pour le niveau gratuit ou une cle premium';
 
   @override
   String get audiobookLibraries => 'Bibliothèques de livres audio';
 
   @override
-  String get chooseAudiobookLibraries => 'Choisir quelles bibliothèques Audiobookshelf inclure';
+  String get chooseAudiobookLibraries =>
+      'Choisir quelles bibliothèques Audiobookshelf inclure';
 
   @override
   String get unknownLibrary => 'Bibliothèque inconnue';
@@ -800,7 +843,8 @@ class SFr extends S {
   String get musicProviders => 'Music Providers';
 
   @override
-  String get musicProvidersDescription => 'Choose which accounts to show in your library';
+  String get musicProvidersDescription =>
+      'Choose which accounts to show in your library';
 
   @override
   String get libraryRefreshing => 'Refreshing library...';
@@ -820,16 +864,19 @@ class SFr extends S {
   }
 
   @override
-  String get noSeriesAvailable => 'Aucune série disponible dans votre bibliothèque de livres audio.\nTirez pour rafraichir.';
+  String get noSeriesAvailable =>
+      'Aucune série disponible dans votre bibliothèque de livres audio.\nTirez pour rafraichir.';
 
   @override
-  String get pullToLoadSeries => 'Tirez vers le bas pour charger les séries\ndepuis Music Assistant';
+  String get pullToLoadSeries =>
+      'Tirez vers le bas pour charger les séries\ndepuis Music Assistant';
 
   @override
   String get search => 'Rechercher';
 
   @override
-  String get metadataApisDescription => 'Les images d\'artistes sont automatiquement recuperees depuis Deezer. Ajoutez les cles API ci-dessous pour les biographies d\'artistes et les descriptions d\'albums.';
+  String get metadataApisDescription =>
+      'Les images d\'artistes sont automatiquement recuperees depuis Deezer. Ajoutez les cles API ci-dessous pour les biographies d\'artistes et les descriptions d\'albums.';
 
   @override
   String get lastFmApiKey => 'Cle API Last.fm';
@@ -852,7 +899,8 @@ class SFr extends S {
   String get playOn => 'Lire sur...';
 
   @override
-  String get addAlbumToQueueOn => 'Ajouter l\'album a la file d\'attente sur...';
+  String get addAlbumToQueueOn =>
+      'Ajouter l\'album a la file d\'attente sur...';
 
   @override
   String get addToQueueOn => 'Ajouter a la file d\'attente sur...';
@@ -889,7 +937,8 @@ class SFr extends S {
   }
 
   @override
-  String get materialYouDescription => 'Utiliser les couleurs systeme (Android 12+)';
+  String get materialYouDescription =>
+      'Utiliser les couleurs systeme (Android 12+)';
 
   @override
   String get accentColor => 'Couleur d\'accentuation';
@@ -901,19 +950,22 @@ class SFr extends S {
   String get preferLocalPlayer => 'Préférer le lecteur local';
 
   @override
-  String get preferLocalPlayerDescription => 'Toujours sélectionner cet appareil en premier si disponible';
+  String get preferLocalPlayerDescription =>
+      'Toujours sélectionner cet appareil en premier si disponible';
 
   @override
   String get smartSortPlayers => 'Tri intelligent';
 
   @override
-  String get smartSortPlayersDescription => 'Trier par statut (en lecture, allume, eteint) au lieu d\'alphabétiquement';
+  String get smartSortPlayersDescription =>
+      'Trier par statut (en lecture, allume, eteint) au lieu d\'alphabétiquement';
 
   @override
   String get disableAutoSwitch => 'Disable Auto-Switch';
 
   @override
-  String get disableAutoSwitchDescription => 'Never automatically switch to a different player';
+  String get disableAutoSwitchDescription =>
+      'Never automatically switch to a different player';
 
   @override
   String get playerStateUnavailable => 'Indisponible';
@@ -945,7 +997,8 @@ class SFr extends S {
   String get showHints => 'Afficher les astuces';
 
   @override
-  String get showHintsDescription => 'Afficher des conseils utiles pour découvrir les fonctionnalites';
+  String get showHintsDescription =>
+      'Afficher des conseils utiles pour découvrir les fonctionnalites';
 
   @override
   String get display => 'Display';
@@ -954,7 +1007,8 @@ class SFr extends S {
   String get showProviderIcons => 'Show Provider Icons';
 
   @override
-  String get showProviderIconsDescription => 'Display provider logos on album art';
+  String get showProviderIconsDescription =>
+      'Display provider logos on album art';
 
   @override
   String get pullToSelectPlayers => 'Tirez pour sélectionner les lecteurs';
@@ -966,19 +1020,22 @@ class SFr extends S {
   String get swipeToAdjustVolume => 'Balayez pour ajuster le volume';
 
   @override
-  String get selectPlayerHint => 'Choisissez un lecteur ou fermez en balayant vers le bas';
+  String get selectPlayerHint =>
+      'Choisissez un lecteur ou fermez en balayant vers le bas';
 
   @override
   String get welcomeToEnsemble => 'Bienvenue dans Ensemble';
 
   @override
-  String get welcomeMessage => 'Par defaut, votre telephone est le lecteur selectionne.\nTirez le mini-lecteur vers le bas pour sélectionner un autre lecteur.';
+  String get welcomeMessage =>
+      'Par defaut, votre telephone est le lecteur selectionne.\nTirez le mini-lecteur vers le bas pour sélectionner un autre lecteur.';
 
   @override
   String get skip => 'Passer';
 
   @override
-  String get dismissPlayerHint => 'Balayez vers le bas, touchez a l\'exterieur ou appuyez sur retour pour revenir';
+  String get dismissPlayerHint =>
+      'Balayez vers le bas, touchez a l\'exterieur ou appuyez sur retour pour revenir';
 
   @override
   String playingAlbum(String albumName) {
@@ -994,19 +1051,22 @@ class SFr extends S {
   String get noTracks => 'No tracks';
 
   @override
-  String get addTracksHint => 'Add some music to your library to see tracks here';
+  String get addTracksHint =>
+      'Add some music to your library to see tracks here';
 
   @override
   String get noFavoriteRadioStations => 'No favorite radio stations';
 
   @override
-  String get longPressRadioHint => 'Long-press a station and tap the heart to add it to favorites';
+  String get longPressRadioHint =>
+      'Long-press a station and tap the heart to add it to favorites';
 
   @override
   String get noFavoritePodcasts => 'No favorite podcasts';
 
   @override
-  String get longPressPodcastHint => 'Long-press a podcast and tap the heart to add it to favorites';
+  String get longPressPodcastHint =>
+      'Long-press a podcast and tap the heart to add it to favorites';
 
   @override
   String failedToPlayRadioStation(String error) {

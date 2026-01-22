@@ -1,5 +1,5 @@
+// ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -39,7 +39,8 @@ class SEn extends S {
   String get portHint => 'e.g., 8095 or leave blank';
 
   @override
-  String get portDescription => 'Leave blank for reverse proxy or standard ports. Enter 8095 for direct connection.';
+  String get portDescription =>
+      'Leave blank for reverse proxy or standard ports. Enter 8095 for direct connection.';
 
   @override
   String get username => 'Username';
@@ -60,10 +61,12 @@ class SEn extends S {
   String get authServerUrlOptional => 'Auth Server URL (Optional)';
 
   @override
-  String get authServerUrlHint => 'e.g., auth.example.com (if different from server)';
+  String get authServerUrlHint =>
+      'e.g., auth.example.com (if different from server)';
 
   @override
-  String get authServerUrlDescription => 'Leave empty if authentication is on the same server';
+  String get authServerUrlDescription =>
+      'Leave empty if authentication is on the same server';
 
   @override
   String detectedAuthType(String authType) {
@@ -80,7 +83,8 @@ class SEn extends S {
   String get unencryptedConnection => 'Unencrypted Connection';
 
   @override
-  String get usingHttpOverTailscale => 'Using HTTP over Tailscale (encrypted tunnel)';
+  String get usingHttpOverTailscale =>
+      'Using HTTP over Tailscale (encrypted tunnel)';
 
   @override
   String get httpsFailedUsingHttp => 'HTTPS failed, using HTTP fallback';
@@ -89,31 +93,37 @@ class SEn extends S {
   String get httpNotEncrypted => 'HTTP connection - data is not encrypted';
 
   @override
-  String get pleaseEnterServerAddress => 'Please enter your Music Assistant server address';
+  String get pleaseEnterServerAddress =>
+      'Please enter your Music Assistant server address';
 
   @override
   String get pleaseEnterName => 'Please enter your name';
 
   @override
-  String get pleaseEnterValidPort => 'Please enter a valid port number (1-65535)';
+  String get pleaseEnterValidPort =>
+      'Please enter a valid port number (1-65535)';
 
   @override
   String get pleaseEnterCredentials => 'Please enter username and password';
 
   @override
-  String get authFailed => 'Authentication failed. Please check your credentials.';
+  String get authFailed =>
+      'Authentication failed. Please check your credentials.';
 
   @override
-  String get maLoginFailed => 'Music Assistant login failed. Please check your credentials.';
+  String get maLoginFailed =>
+      'Music Assistant login failed. Please check your credentials.';
 
   @override
-  String get connectionFailed => 'Could not connect to server. Please check the address and try again.';
+  String get connectionFailed =>
+      'Could not connect to server. Please check the address and try again.';
 
   @override
   String get detectingAuth => 'Detecting authentication...';
 
   @override
-  String get cannotDetermineAuth => 'Cannot determine authentication requirements. Please check server URL.';
+  String get cannotDetermineAuth =>
+      'Cannot determine authentication requirements. Please check server URL.';
 
   @override
   String get noAuthentication => 'No Authentication';
@@ -471,37 +481,43 @@ class SEn extends S {
   String get noFavoriteAudiobooks => 'No favorite audiobooks';
 
   @override
-  String get tapHeartAudiobook => 'Tap the heart on an audiobook to add it to favorites';
+  String get tapHeartAudiobook =>
+      'Tap the heart on an audiobook to add it to favorites';
 
   @override
   String get noAudiobooks => 'No audiobooks';
 
   @override
-  String get addAudiobooksHint => 'Add audiobooks to your library to see them here';
+  String get addAudiobooksHint =>
+      'Add audiobooks to your library to see them here';
 
   @override
   String get noFavoriteArtists => 'No favorite artists';
 
   @override
-  String get tapHeartArtist => 'Tap the heart on an artist to add them to favorites';
+  String get tapHeartArtist =>
+      'Tap the heart on an artist to add them to favorites';
 
   @override
   String get noFavoriteAlbums => 'No favorite albums';
 
   @override
-  String get tapHeartAlbum => 'Tap the heart on an album to add it to favorites';
+  String get tapHeartAlbum =>
+      'Tap the heart on an album to add it to favorites';
 
   @override
   String get noFavoritePlaylists => 'No favorite playlists';
 
   @override
-  String get tapHeartPlaylist => 'Tap the heart on a playlist to add it to favorites';
+  String get tapHeartPlaylist =>
+      'Tap the heart on a playlist to add it to favorites';
 
   @override
   String get noFavoriteTracks => 'No favorite tracks';
 
   @override
-  String get longPressTrackHint => 'Long-press a track and tap the heart to add it to favorites';
+  String get longPressTrackHint =>
+      'Long-press a track and tap the heart to add it to favorites';
 
   @override
   String get loadSeries => 'Load Series';
@@ -513,7 +529,8 @@ class SEn extends S {
   String get notConnectedTitle => 'Not Connected';
 
   @override
-  String get connectHint => 'Connect to your Music Assistant server to start listening';
+  String get connectHint =>
+      'Connect to your Music Assistant server to start listening';
 
   @override
   String get configureServer => 'Configure Server';
@@ -667,16 +684,19 @@ class SEn extends S {
   String get showFavoritePlaylists => 'Show a row of your favorite playlists';
 
   @override
-  String get showFavoriteRadioStations => 'Show a row of your favorite radio stations';
+  String get showFavoriteRadioStations =>
+      'Show a row of your favorite radio stations';
 
   @override
   String get showFavoritePodcasts => 'Show a row of your favorite podcasts';
 
   @override
-  String get extractColorsFromArtwork => 'Extract colors from album and artist artwork';
+  String get extractColorsFromArtwork =>
+      'Extract colors from album and artist artwork';
 
   @override
-  String get chooseHomeScreenRows => 'Choose which rows to display on the home screen';
+  String get chooseHomeScreenRows =>
+      'Choose which rows to display on the home screen';
 
   @override
   String get addedToFavorites => 'Added to favorites';
@@ -791,7 +811,8 @@ class SEn extends S {
   String get audiobookLibraries => 'Audiobook Libraries';
 
   @override
-  String get chooseAudiobookLibraries => 'Choose which Audiobookshelf libraries to include';
+  String get chooseAudiobookLibraries =>
+      'Choose which Audiobookshelf libraries to include';
 
   @override
   String get unknownLibrary => 'Unknown Library';
@@ -800,7 +821,8 @@ class SEn extends S {
   String get musicProviders => 'Music Providers';
 
   @override
-  String get musicProvidersDescription => 'Choose which accounts to show in your library';
+  String get musicProvidersDescription =>
+      'Choose which accounts to show in your library';
 
   @override
   String get libraryRefreshing => 'Refreshing library...';
@@ -820,16 +842,19 @@ class SEn extends S {
   }
 
   @override
-  String get noSeriesAvailable => 'No series available from your audiobook library.\nPull to refresh.';
+  String get noSeriesAvailable =>
+      'No series available from your audiobook library.\nPull to refresh.';
 
   @override
-  String get pullToLoadSeries => 'Pull down to load series\nfrom Music Assistant';
+  String get pullToLoadSeries =>
+      'Pull down to load series\nfrom Music Assistant';
 
   @override
   String get search => 'Search';
 
   @override
-  String get metadataApisDescription => 'Artist images are automatically fetched from Deezer. Add API keys below for artist biographies and album descriptions.';
+  String get metadataApisDescription =>
+      'Artist images are automatically fetched from Deezer. Add API keys below for artist biographies and album descriptions.';
 
   @override
   String get lastFmApiKey => 'Last.fm API Key';
@@ -901,19 +926,22 @@ class SEn extends S {
   String get preferLocalPlayer => 'Prefer Local Player';
 
   @override
-  String get preferLocalPlayerDescription => 'Always select this device first when available';
+  String get preferLocalPlayerDescription =>
+      'Always select this device first when available';
 
   @override
   String get smartSortPlayers => 'Smart Sort';
 
   @override
-  String get smartSortPlayersDescription => 'Sort by status (playing, on, off) instead of alphabetically';
+  String get smartSortPlayersDescription =>
+      'Sort by status (playing, on, off) instead of alphabetically';
 
   @override
   String get disableAutoSwitch => 'Disable Auto-Switch';
 
   @override
-  String get disableAutoSwitchDescription => 'Never automatically switch to a different player';
+  String get disableAutoSwitchDescription =>
+      'Never automatically switch to a different player';
 
   @override
   String get playerStateUnavailable => 'Unavailable';
@@ -945,7 +973,8 @@ class SEn extends S {
   String get showHints => 'Show Hints';
 
   @override
-  String get showHintsDescription => 'Display helpful tips for discovering features';
+  String get showHintsDescription =>
+      'Display helpful tips for discovering features';
 
   @override
   String get display => 'Display';
@@ -954,7 +983,8 @@ class SEn extends S {
   String get showProviderIcons => 'Show Provider Icons';
 
   @override
-  String get showProviderIconsDescription => 'Display provider logos on album art';
+  String get showProviderIconsDescription =>
+      'Display provider logos on album art';
 
   @override
   String get pullToSelectPlayers => 'Pull to select players';
@@ -972,13 +1002,15 @@ class SEn extends S {
   String get welcomeToEnsemble => 'Welcome to Ensemble';
 
   @override
-  String get welcomeMessage => 'By default your phone is the selected player.\nPull the mini player down to select another player.';
+  String get welcomeMessage =>
+      'By default your phone is the selected player.\nPull the mini player down to select another player.';
 
   @override
   String get skip => 'Skip';
 
   @override
-  String get dismissPlayerHint => 'Swipe down, tap outside, or press back to return';
+  String get dismissPlayerHint =>
+      'Swipe down, tap outside, or press back to return';
 
   @override
   String playingAlbum(String albumName) {
@@ -994,19 +1026,22 @@ class SEn extends S {
   String get noTracks => 'No tracks';
 
   @override
-  String get addTracksHint => 'Add some music to your library to see tracks here';
+  String get addTracksHint =>
+      'Add some music to your library to see tracks here';
 
   @override
   String get noFavoriteRadioStations => 'No favorite radio stations';
 
   @override
-  String get longPressRadioHint => 'Long-press a station and tap the heart to add it to favorites';
+  String get longPressRadioHint =>
+      'Long-press a station and tap the heart to add it to favorites';
 
   @override
   String get noFavoritePodcasts => 'No favorite podcasts';
 
   @override
-  String get longPressPodcastHint => 'Long-press a podcast and tap the heart to add it to favorites';
+  String get longPressPodcastHint =>
+      'Long-press a podcast and tap the heart to add it to favorites';
 
   @override
   String failedToPlayRadioStation(String error) {
