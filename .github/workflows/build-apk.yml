@@ -31,8 +31,8 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
-          channel: 'stable'
+          flutter-version: '3.38.0'
+          channel: 'master'
           cache: true
 
       - name: Cache Gradle dependencies
@@ -63,10 +63,7 @@ jobs:
 
       - name: Setup signing keystore
         run: |
-          # Decode keystore from secret (persistent key for consistent signatures)
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
-
-          # Create key.properties file
           cat > android/key.properties << EOF
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
@@ -76,10 +73,8 @@ jobs:
 
       - name: Build APK
         run: |
-          # Use init.gradle to force Maven mirrors (workaround for Maven Central 403)
           mkdir -p ~/.gradle
           cp android/init.gradle ~/.gradle/init.gradle
-
           flutter build apk --release
 
       - name: Upload APK artifact
@@ -91,10 +86,5 @@ jobs:
 
       - name: Upload APK summary
         run: |
-          echo "## APK Build Successful! 🎉" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📱 **APK Location:** \`build/app/outputs/flutter-apk/app-release.apk\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📦 **Download:** Check the artifacts section below" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## APK Build Successful!" >> $GITHUB_STEP_SUMMARY
           ls -lh build/app/outputs/flutter-apk/app-release.apk >> $GITHUB_STEP_SUMMARY
