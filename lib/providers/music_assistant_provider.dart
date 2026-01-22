@@ -105,6 +105,12 @@ class MusicAssistantProvider with ChangeNotifier {
   SendspinService? _sendspinService;
   bool _sendspinConnected = false;
 
+  // Remote mode flag - persisted across reconnections
+  bool _isRemoteMode = false;
+
+  // Remote cloud URL for Sendspin connection (e.g., xxxxxxxx.ui.nabu.casa)
+  String? _remoteCloudUrl;
+
   // PCM audio player for raw Sendspin audio streaming
   PcmAudioPlayer? _pcmAudioPlayer;
 
@@ -1029,10 +1035,12 @@ class MusicAssistantProvider with ChangeNotifier {
   // CONNECTION
   // ============================================================================
 
-  Future<void> connectToServer(String serverUrl, {bool isRemoteMode = false}) async {
+  Future<void> connectToServer(String serverUrl, {bool isRemoteMode = false, String? remoteCloudUrl}) async {
     try {
       _error = null;
       _serverUrl = serverUrl;
+      _isRemoteMode = isRemoteMode; // Store for reconnection
+      _remoteCloudUrl = remoteCloudUrl; // Store cloud URL for Sendspin in remote mode
       await SettingsService.setServerUrl(serverUrl);
 
       // Dispose the old API to stop any pending reconnects
@@ -1876,9 +1884,9 @@ class MusicAssistantProvider with ChangeNotifier {
 
     if (_connectionState != MAConnectionState.connected &&
         _connectionState != MAConnectionState.authenticated) {
-      _logger.log('🔄 Not connected, attempting reconnect to $_serverUrl');
+      _logger.log('🔄 Not connected, attempting reconnect to $_serverUrl (remote: $_isRemoteMode)');
       try {
-        await connectToServer(_serverUrl!);
+        await connectToServer(_serverUrl!, isRemoteMode: _isRemoteMode, remoteCloudUrl: _remoteCloudUrl);
         _logger.log('🔄 Reconnection successful');
       } catch (e) {
         _logger.log('🔄 Reconnection failed: $e');
@@ -1893,7 +1901,7 @@ class MusicAssistantProvider with ChangeNotifier {
       } catch (e) {
         _logger.log('🔄 Connection verification failed, reconnecting: $e');
         try {
-          await connectToServer(_serverUrl!);
+          await connectToServer(_serverUrl!, isRemoteMode: _isRemoteMode, remoteCloudUrl: _remoteCloudUrl);
         } catch (reconnectError) {
           _logger.log('🔄 Reconnection failed: $reconnectError');
         }
@@ -2134,17 +2142,71 @@ class MusicAssistantProvider with ChangeNotifier {
   /// - MA 2.7.x: NO proxy, must either:
   ///   - Use local IP with port 8927 exposed, OR
   ///   - Manually configure reverse proxy to route /sendspin to port 8927
+  /// - Remote mode: Uses WebRTC bridge tunnel (ws://localhost:PORT/sendspin)
   Future<bool> _connectViaSendspin() async {
     if (_api == null || _serverUrl == null) return false;
 
     try {
       final serverVersion = _getServerVersionString();
       final hasProxy = _serverHasSendspinProxy();
-      _logger.log('Sendspin: Server version $serverVersion, has proxy: $hasProxy');
+      _logger.log('Sendspin: Server version $serverVersion, has proxy: $hasProxy, remote: $_isRemoteMode');
 
-      // Initialize Sendspin service
+      // In remote mode, connect via the WebRTC bridge tunnel
+      if (_isRemoteMode) {
+        // The bridge provides Sendspin tunnel at ws://localhost:PORT/sendspin
+        // Extract port from the server URL (which is ws://localhost:PORT for remote)
+        final serverUri = Uri.parse(_serverUrl!);
+        if (serverUri.host != 'localhost' && serverUri.host != '127.0.0.1') {
+          _logger.log('⚠️ Sendspin: Remote mode but server URL is not localhost bridge');
+          return false;
+        }
+
+        final bridgeSendspinUrl = 'ws://${serverUri.host}:${serverUri.port}/sendspin';
+        _logger.log('Sendspin: Remote mode - connecting via WebRTC bridge: $bridgeSendspinUrl');
+
+        // Initialize Sendspin service with the bridge's /sendspin endpoint
+        _sendspinService?.dispose();
+        _sendspinService = SendspinService(_serverUrl!);  // Base URL for service reference
+
+        // Initialize PCM audio player
+        _pcmAudioPlayer?.dispose();
+        _pcmAudioPlayer = PcmAudioPlayer();
+        final pcmInitialized = await _pcmAudioPlayer!.initialize();
+        if (pcmInitialized) {
+          _logger.log('✅ PCM audio player initialized for Sendspin');
+          await _pcmAudioPlayer!.connectToStream(_sendspinService!.audioDataStream);
+        }
+
+        // Wire up callbacks
+        _sendspinService!.onPlay = _handleSendspinPlay;
+        _sendspinService!.onPause = _handleSendspinPause;
+        _sendspinService!.onStop = _handleSendspinStop;
+        _sendspinService!.onSeek = _handleSendspinSeek;
+        _sendspinService!.onVolume = _handleSendspinVolume;
+        _sendspinService!.onStreamStart = _handleSendspinStreamStart;
+        _sendspinService!.onStreamEnd = _handleSendspinStreamEnd;
+
+        final playerId = await DeviceIdService.getOrCreateDevicePlayerId();
+        _logger.log('Sendspin: Player ID: $playerId');
+
+        // Connect directly to the bridge's /sendspin endpoint
+        // No proxy auth needed - the bridge handles authentication via WebRTC
+        final connected = await _sendspinService!.connectWithUrl(bridgeSendspinUrl);
+        if (connected) {
+          _sendspinConnected = true;
+          _logger.log('✅ Sendspin: Connected via WebRTC bridge tunnel');
+          return true;
+        }
+        _logger.log('⚠️ Sendspin: WebRTC bridge tunnel connection failed');
+        return false;
+      }
+
+      // Local mode - use server URL directly
+      String sendspinServerUrl = _serverUrl!;
+
+      // Initialize Sendspin service with the appropriate server URL
       _sendspinService?.dispose();
-      _sendspinService = SendspinService(_serverUrl!);
+      _sendspinService = SendspinService(sendspinServerUrl);
 
       // Set auth token for proxy authentication (MA 2.7.1+ or manually configured proxy)
       final authToken = await SettingsService.getMaAuthToken();
@@ -2177,13 +2239,13 @@ class MusicAssistantProvider with ChangeNotifier {
       final playerId = await DeviceIdService.getOrCreateDevicePlayerId();
       _logger.log('Sendspin: Player ID: $playerId');
 
-      // Parse server URL to determine connection strategy
-      final serverUri = Uri.parse(_serverUrl!.startsWith('http')
-          ? _serverUrl!
-          : 'https://$_serverUrl');
+      // Parse server URL to determine connection strategy (local mode only - remote handled above)
+      final serverUri = Uri.parse(sendspinServerUrl.startsWith('http')
+          ? sendspinServerUrl
+          : 'https://$sendspinServerUrl');
       final isLocalIp = _isLocalNetworkHost(serverUri.host);
       final isHttps = serverUri.scheme == 'https' ||
-                      (!_serverUrl!.contains('://') && !isLocalIp);
+                      (!sendspinServerUrl.contains('://') && !isLocalIp);
 
       // Strategy 1: For local IPs, connect directly to Sendspin port 8927
       if (isLocalIp) {
@@ -2748,7 +2810,14 @@ class MusicAssistantProvider with ChangeNotifier {
           Map<String, dynamic>? metadata;
           if (imageUrl != null) {
             var finalImageUrl = imageUrl;
-            if (_serverUrl != null) {
+            // In remote mode, don't use imageproxy (can't reach MA server through WebRTC tunnel)
+            // Use the original URL directly if it's an external HTTPS URL
+            if (_api?.isRemoteMode == true) {
+              // Keep external URLs as-is, they should work directly
+              if (!imageUrl.startsWith('https://')) {
+                finalImageUrl = imageUrl; // May not load, but better than broken imageproxy
+              }
+            } else if (_serverUrl != null && !_serverUrl!.startsWith('ws://') && !_serverUrl!.startsWith('wss://')) {
               try {
                 final imgUri = Uri.parse(imageUrl);
                 final queryString = imgUri.query;
@@ -2988,7 +3057,9 @@ class MusicAssistantProvider with ChangeNotifier {
       }
       artist ??= 'Unknown Artist';
 
-      if (imageUrl != null && _serverUrl != null) {
+      // In remote mode, don't use imageproxy (can't reach MA server through WebRTC tunnel)
+      if (imageUrl != null && _api?.isRemoteMode != true && _serverUrl != null &&
+          !_serverUrl!.startsWith('ws://') && !_serverUrl!.startsWith('wss://')) {
         try {
           final imgUri = Uri.parse(imageUrl);
           final queryString = imgUri.query;
@@ -4837,7 +4908,8 @@ class MusicAssistantProvider with ChangeNotifier {
       }
 
       // Fetch tracks from API (not cached - too many items)
-      if (_api != null) {
+      // Skip in remote mode to keep connection responsive
+      if (_api != null && !_api!.isRemoteMode) {
         try {
           _tracks = await _api!.getTracks(
             limit: LibraryConstants.maxLibraryItems,
@@ -4847,6 +4919,8 @@ class MusicAssistantProvider with ChangeNotifier {
         } catch (e) {
           _logger.log('⚠️ Failed to fetch tracks: $e');
         }
+      } else if (_api?.isRemoteMode == true) {
+        _logger.log('🌐 Remote mode: skipping tracks fetch');
       }
 
       _isLoading = false;
@@ -4868,6 +4942,13 @@ class MusicAssistantProvider with ChangeNotifier {
   Future<void> _syncLibraryInBackground() async {
     if (_api == null) return;
 
+    // In remote mode, delay sync to let player/queue operations complete first
+    if (_api!.isRemoteMode) {
+      _logger.log('🌐 Remote mode: delaying library sync by 3 seconds');
+      await Future.delayed(const Duration(seconds: 3));
+      if (_api == null || !isConnected) return; // Check still connected
+    }
+
     final syncService = SyncService.instance;
 
     // Listen for sync completion to update our lists
@@ -4882,7 +4963,14 @@ class MusicAssistantProvider with ChangeNotifier {
     }
 
     syncService.addListener(onSyncComplete);
-    await syncService.syncFromApi(_api!, providerInstanceIds: providerIdsForApiCalls);
+
+    // In remote mode, force sync but use gentler approach (handled in SyncService)
+    if (_api!.isRemoteMode) {
+      _logger.log('🌐 Remote mode: starting gentle library sync');
+      await syncService.forceSync(_api!, providerInstanceIds: providerIdsForApiCalls);
+    } else {
+      await syncService.syncFromApi(_api!, providerInstanceIds: providerIdsForApiCalls);
+    }
   }
 
   /// Load radio stations from the library

@@ -532,12 +532,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
       _addDebugLog('Remote bridge started on port $port');
 
+      // Save credentials BEFORE connecting - needed for MA authentication via bridge
+      await SettingsService.setUsername(username);
+      await SettingsService.setPassword(password);
+
       // Connect to the local bridge endpoint
       final serverUrl = 'ws://localhost:$port';
       final provider = context.read<MusicAssistantProvider>();
 
       _addDebugLog('Connecting to bridge at $serverUrl');
-      await provider.connectToServer(serverUrl, isRemoteMode: true);
+      // Pass remoteId as cloud URL for Sendspin to connect directly
+      await provider.connectToServer(serverUrl, isRemoteMode: true, remoteCloudUrl: remoteId);
 
       // Wait for connection
       for (int i = 0; i < 10; i++) {

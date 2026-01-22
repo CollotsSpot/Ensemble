@@ -242,24 +242,44 @@ class SyncService with ChangeNotifier {
       final playlistMap = <String, Playlist>{};
 
       // If specific providers are requested, sync each separately for accurate source tracking
+      // Use smaller batches in remote mode to avoid WebRTC message size issues
+      final limit = api.isRemoteMode ? 100 : 1000;
+
       if (providerInstanceIds != null && providerInstanceIds.isNotEmpty) {
-        _logger.log('🔒 Per-provider sync for ${providerInstanceIds.length} providers');
+        _logger.log('🔒 Per-provider sync for ${providerInstanceIds.length} providers (limit: $limit, remote: ${api.isRemoteMode})');
 
         for (final providerId in providerInstanceIds) {
           _logger.log('  📡 Syncing provider: $providerId');
 
-          // Fetch from this specific provider
-          final results = await Future.wait([
-            api.getAlbums(limit: 1000, providerInstanceIds: [providerId]),
-            api.getArtists(limit: 1000, albumArtistsOnly: showOnlyArtistsWithAlbums, providerInstanceIds: [providerId]),
-            api.getAudiobooks(limit: 1000, providerInstanceIds: [providerId]),
-            api.getPlaylists(limit: 1000, providerInstanceIds: [providerId]),
-          ]);
+          List<Album> albums;
+          List<Artist> artists;
+          List<Audiobook> audiobooks;
+          List<Playlist> playlists;
 
-          final albums = results[0] as List<Album>;
-          final artists = results[1] as List<Artist>;
-          final audiobooks = results[2] as List<Audiobook>;
-          final playlists = results[3] as List<Playlist>;
+          // In remote mode, do sequential requests to avoid overwhelming WebRTC
+          if (api.isRemoteMode) {
+            albums = await api.getAlbums(limit: limit, providerInstanceIds: [providerId]);
+            await Future.delayed(const Duration(milliseconds: 300));
+            artists = await api.getArtists(limit: limit, albumArtistsOnly: showOnlyArtistsWithAlbums, providerInstanceIds: [providerId]);
+            await Future.delayed(const Duration(milliseconds: 300));
+            audiobooks = await api.getAudiobooks(limit: limit, providerInstanceIds: [providerId]);
+            await Future.delayed(const Duration(milliseconds: 300));
+            playlists = await api.getPlaylists(limit: limit, providerInstanceIds: [providerId]);
+            await Future.delayed(const Duration(milliseconds: 300));
+          } else {
+            // Local mode: parallel requests for speed
+            final results = await Future.wait([
+              api.getAlbums(limit: limit, providerInstanceIds: [providerId]),
+              api.getArtists(limit: limit, albumArtistsOnly: showOnlyArtistsWithAlbums, providerInstanceIds: [providerId]),
+              api.getAudiobooks(limit: limit, providerInstanceIds: [providerId]),
+              api.getPlaylists(limit: limit, providerInstanceIds: [providerId]),
+            ]);
+
+            albums = results[0] as List<Album>;
+            artists = results[1] as List<Artist>;
+            audiobooks = results[2] as List<Audiobook>;
+            playlists = results[3] as List<Playlist>;
+          }
 
           _logger.log('  📥 Got ${albums.length} albums, ${artists.length} artists, ${audiobooks.length} audiobooks from $providerId');
 
@@ -295,26 +315,59 @@ class SyncService with ChangeNotifier {
         }
       } else {
         // No provider filter - fetch all at once (faster, but no source tracking)
-        _logger.log('📡 Fetching from all providers (no source tracking)');
+        _logger.log('📡 Fetching from all providers (no source tracking, limit: $limit)');
 
-        final results = await Future.wait([
-          api.getAlbums(limit: 1000),
-          api.getArtists(limit: 1000, albumArtistsOnly: showOnlyArtistsWithAlbums),
-          api.getAudiobooks(limit: 1000),
-          api.getPlaylists(limit: 1000),
-        ]);
+        // In remote mode, do sequential requests to avoid overwhelming WebRTC
+        if (api.isRemoteMode) {
+          _logger.log('🌐 Remote mode: using sequential requests with delays');
 
-        for (final album in results[0] as List<Album>) {
-          albumMap[album.itemId] = album;
-        }
-        for (final artist in results[1] as List<Artist>) {
-          artistMap[artist.itemId] = artist;
-        }
-        for (final audiobook in results[2] as List<Audiobook>) {
-          audiobookMap[audiobook.itemId] = audiobook;
-        }
-        for (final playlist in results[3] as List<Playlist>) {
-          playlistMap[playlist.itemId] = playlist;
+          final albums = await api.getAlbums(limit: limit);
+          for (final album in albums) {
+            albumMap[album.itemId] = album;
+          }
+          _logger.log('  📥 Got ${albums.length} albums');
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          final artists = await api.getArtists(limit: limit, albumArtistsOnly: showOnlyArtistsWithAlbums);
+          for (final artist in artists) {
+            artistMap[artist.itemId] = artist;
+          }
+          _logger.log('  📥 Got ${artists.length} artists');
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          final audiobooks = await api.getAudiobooks(limit: limit);
+          for (final audiobook in audiobooks) {
+            audiobookMap[audiobook.itemId] = audiobook;
+          }
+          _logger.log('  📥 Got ${audiobooks.length} audiobooks');
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          final playlists = await api.getPlaylists(limit: limit);
+          for (final playlist in playlists) {
+            playlistMap[playlist.itemId] = playlist;
+          }
+          _logger.log('  📥 Got ${playlists.length} playlists');
+        } else {
+          // Local mode: parallel requests for speed
+          final results = await Future.wait([
+            api.getAlbums(limit: limit),
+            api.getArtists(limit: limit, albumArtistsOnly: showOnlyArtistsWithAlbums),
+            api.getAudiobooks(limit: limit),
+            api.getPlaylists(limit: limit),
+          ]);
+
+          for (final album in results[0] as List<Album>) {
+            albumMap[album.itemId] = album;
+          }
+          for (final artist in results[1] as List<Artist>) {
+            artistMap[artist.itemId] = artist;
+          }
+          for (final audiobook in results[2] as List<Audiobook>) {
+            audiobookMap[audiobook.itemId] = audiobook;
+          }
+          for (final playlist in results[3] as List<Playlist>) {
+            playlistMap[playlist.itemId] = playlist;
+          }
         }
       }
 

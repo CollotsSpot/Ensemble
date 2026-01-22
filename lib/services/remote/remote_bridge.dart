@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:ensemble/services/remote/webrtc_connection.dart';
 import 'package:ensemble/services/debug_logger.dart';
 
@@ -10,23 +11,41 @@ import 'package:ensemble/services/debug_logger.dart';
 /// Architecture:
 /// ```
 /// MusicAssistantAPI → localhost:port → RemoteBridge → WebRTC → MA Server
+/// Sendspin → localhost:port/sendspin → RemoteBridge → WebRTC (sendspin channel) → MA Server
 /// ```
 class RemoteBridge {
   HttpServer? _server;
-  WebSocket? _clientSocket;
   WebRTCConnection? _webrtcConnection;
   int? _port;
 
-  StreamSubscription? _clientSubscription;
-  StreamSubscription? _webrtcSubscription;
+  // API client (MusicAssistantAPI)
+  WebSocket? _apiClientSocket;
+  StreamSubscription? _apiClientSubscription;
+  StreamSubscription? _apiWebrtcSubscription;
+
+  // Sendspin client (local player audio)
+  WebSocket? _sendspinClientSocket;
+  StreamSubscription? _sendspinClientSubscription;
+  StreamSubscription? _sendspinTextSubscription;
+  StreamSubscription? _sendspinBinarySubscription;
+
+  Timer? _healthCheckTimer;
 
   // Cached server hello to replay when WS client connects
   String? _cachedServerHello;
+
+  // Debug counters
+  int _apiMessagesSent = 0;
+  int _apiMessagesReceived = 0;
+  int _sendspinMessagesSent = 0;
+  int _sendspinMessagesReceived = 0;
+  DateTime? _lastMessageReceived;
 
   final DebugLogger _logger = DebugLogger();
 
   int? get port => _port;
   bool get isRunning => _server != null;
+  bool get isSendspinReady => _webrtcConnection?.isSendspinConnected ?? false;
 
   /// Start the bridge and connect to the remote MA server.
   /// Returns the local port number to connect to, or null if failed.
@@ -82,13 +101,37 @@ class RemoteBridge {
       // Handle incoming connections
       _server!.listen(_handleHttpRequest);
 
-      // Step 5: Subscribe to WebRTC messages to forward to WS client
-      _webrtcSubscription = _webrtcConnection!.rawMessages.listen((message) {
-        if (_clientSocket != null) {
-          _logger.log('RemoteBridge: WebRTC → WS: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
-          _clientSocket!.add(message);
+      // Step 5: Subscribe to WebRTC API messages to forward to API client
+      _apiWebrtcSubscription = _webrtcConnection!.rawMessages.listen((message) {
+        _apiMessagesReceived++;
+        _lastMessageReceived = DateTime.now();
+        if (_apiClientSocket != null) {
+          _logger.log('RemoteBridge: WebRTC API → WS: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
+          _apiClientSocket!.add(message);
         }
       });
+
+      // Step 6: Subscribe to Sendspin WebRTC messages (text) to forward to Sendspin client
+      _sendspinTextSubscription = _webrtcConnection!.sendspinTextMessages.listen((message) {
+        _sendspinMessagesReceived++;
+        _lastMessageReceived = DateTime.now();
+        if (_sendspinClientSocket != null) {
+          _logger.log('RemoteBridge: WebRTC Sendspin text → WS: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
+          _sendspinClientSocket!.add(message);
+        }
+      });
+
+      // Step 7: Subscribe to Sendspin WebRTC messages (binary audio) to forward to Sendspin client
+      _sendspinBinarySubscription = _webrtcConnection!.sendspinBinaryMessages.listen((data) {
+        _sendspinMessagesReceived++;
+        if (_sendspinClientSocket != null) {
+          // Forward binary audio data to Sendspin client
+          _sendspinClientSocket!.add(data);
+        }
+      });
+
+      // Step 8: Start health check timer
+      _startHealthCheck();
 
       return _port;
     } catch (e) {
@@ -157,12 +200,19 @@ class RemoteBridge {
 
   /// Handle incoming HTTP requests and upgrade to WebSocket.
   void _handleHttpRequest(HttpRequest request) async {
-    _logger.log('RemoteBridge: Incoming HTTP request: ${request.uri.path}');
+    final path = request.uri.path;
+    _logger.log('RemoteBridge: Incoming HTTP request: $path');
 
     if (WebSocketTransformer.isUpgradeRequest(request)) {
       try {
         final socket = await WebSocketTransformer.upgrade(request);
-        _handleClientConnection(socket);
+
+        // Route based on path: /sendspin for audio, anything else for API
+        if (path == '/sendspin') {
+          _handleSendspinConnection(socket);
+        } else {
+          _handleApiConnection(socket);
+        }
       } catch (e) {
         _logger.log('RemoteBridge: WebSocket upgrade failed: $e');
         request.response.statusCode = HttpStatus.internalServerError;
@@ -175,67 +225,148 @@ class RemoteBridge {
     }
   }
 
-  /// Handle a new WebSocket client connection.
-  void _handleClientConnection(WebSocket socket) {
-    _logger.log('RemoteBridge: WS client connected');
+  /// Handle a new API WebSocket client connection.
+  void _handleApiConnection(WebSocket socket) {
+    _logger.log('RemoteBridge: API client connected');
 
-    // Only allow one client at a time
-    if (_clientSocket != null) {
-      _logger.log('RemoteBridge: Closing existing client connection');
-      _clientSubscription?.cancel();
-      _clientSocket?.close();
+    // Only allow one API client at a time
+    if (_apiClientSocket != null) {
+      _logger.log('RemoteBridge: Closing existing API client connection');
+      _apiClientSubscription?.cancel();
+      _apiClientSocket?.close();
     }
 
-    _clientSocket = socket;
+    _apiClientSocket = socket;
 
     // Step 1: Send cached server hello immediately
     if (_cachedServerHello != null) {
-      _logger.log('RemoteBridge: Sending cached server hello to client');
-      _clientSocket!.add(_cachedServerHello!);
+      _logger.log('RemoteBridge: Sending cached server hello to API client');
+      _apiClientSocket!.add(_cachedServerHello!);
     }
 
-    // Step 2: Forward all messages from WS client to WebRTC
-    _clientSubscription = _clientSocket!.listen(
+    // Step 2: Forward all messages from API client to WebRTC (ma-api channel)
+    _apiClientSubscription = _apiClientSocket!.listen(
       (message) {
         if (message is String && _webrtcConnection != null) {
-          _logger.log('RemoteBridge: WS → WebRTC: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
+          _apiMessagesSent++;
+          _logger.log('RemoteBridge: API WS → WebRTC: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
           _webrtcConnection!.sendRaw(message);
         }
       },
       onDone: () {
-        _logger.log('RemoteBridge: WS client disconnected');
-        _clientSocket = null;
-        _clientSubscription = null;
+        _logger.log('RemoteBridge: API client disconnected');
+        _apiClientSocket = null;
+        _apiClientSubscription = null;
       },
       onError: (error) {
-        _logger.log('RemoteBridge: WS client error: $error');
-        _clientSocket = null;
-        _clientSubscription = null;
+        _logger.log('RemoteBridge: API client error: $error');
+        _apiClientSocket = null;
+        _apiClientSubscription = null;
+      },
+    );
+  }
+
+  /// Handle a new Sendspin WebSocket client connection (for audio streaming).
+  void _handleSendspinConnection(WebSocket socket) {
+    _logger.log('RemoteBridge: Sendspin client connected');
+
+    // Only allow one Sendspin client at a time
+    if (_sendspinClientSocket != null) {
+      _logger.log('RemoteBridge: Closing existing Sendspin client connection');
+      _sendspinClientSubscription?.cancel();
+      _sendspinClientSocket?.close();
+    }
+
+    _sendspinClientSocket = socket;
+
+    // Forward all messages from Sendspin client to WebRTC (sendspin channel)
+    _sendspinClientSubscription = _sendspinClientSocket!.listen(
+      (message) {
+        if (_webrtcConnection != null) {
+          _sendspinMessagesSent++;
+          if (message is String) {
+            // Text message (JSON control)
+            _logger.log('RemoteBridge: Sendspin WS text → WebRTC: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
+            _webrtcConnection!.sendSendspinText(message);
+          } else if (message is List<int>) {
+            // Binary message (would be audio data from client, unlikely but handle it)
+            _webrtcConnection!.sendSendspinBinary(Uint8List.fromList(message));
+          }
+        }
+      },
+      onDone: () {
+        _logger.log('RemoteBridge: Sendspin client disconnected');
+        _sendspinClientSocket = null;
+        _sendspinClientSubscription = null;
+      },
+      onError: (error) {
+        _logger.log('RemoteBridge: Sendspin client error: $error');
+        _sendspinClientSocket = null;
+        _sendspinClientSubscription = null;
       },
     );
   }
 
   /// Handle WebRTC disconnection.
   void _handleWebRTCDisconnection() {
-    _logger.log('RemoteBridge: WebRTC disconnected, closing WS client');
-    _clientSocket?.close();
-    _clientSocket = null;
-    _clientSubscription?.cancel();
-    _clientSubscription = null;
+    _logger.log('RemoteBridge: WebRTC disconnected, closing all WS clients');
+
+    // Close API client
+    _apiClientSocket?.close();
+    _apiClientSocket = null;
+    _apiClientSubscription?.cancel();
+    _apiClientSubscription = null;
+
+    // Close Sendspin client
+    _sendspinClientSocket?.close();
+    _sendspinClientSocket = null;
+    _sendspinClientSubscription?.cancel();
+    _sendspinClientSubscription = null;
+  }
+
+  /// Start periodic health check to monitor connection state
+  void _startHealthCheck() {
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      final dcState = _webrtcConnection?.dataChannelStateDebug ?? 'no connection';
+      final sendspinState = _webrtcConnection?.isSendspinConnected ?? false;
+      final wcState = _webrtcConnection?.state.toString() ?? 'no connection';
+      final timeSinceLastMsg = _lastMessageReceived != null
+          ? DateTime.now().difference(_lastMessageReceived!).inSeconds
+          : -1;
+      _logger.log('RemoteBridge: Health check - API DC:$dcState, Sendspin:$sendspinState, WC:$wcState, '
+          'API sent:$_apiMessagesSent recv:$_apiMessagesReceived, '
+          'Sendspin sent:$_sendspinMessagesSent recv:$_sendspinMessagesReceived, '
+          'lastRecv:${timeSinceLastMsg}s ago');
+    });
   }
 
   /// Stop the bridge and disconnect from the remote server.
   Future<void> stop() async {
     _logger.log('RemoteBridge: Stopping bridge');
 
-    _clientSubscription?.cancel();
-    _clientSubscription = null;
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
 
-    _webrtcSubscription?.cancel();
-    _webrtcSubscription = null;
+    // Cancel API subscriptions
+    _apiClientSubscription?.cancel();
+    _apiClientSubscription = null;
+    _apiWebrtcSubscription?.cancel();
+    _apiWebrtcSubscription = null;
 
-    await _clientSocket?.close();
-    _clientSocket = null;
+    // Cancel Sendspin subscriptions
+    _sendspinClientSubscription?.cancel();
+    _sendspinClientSubscription = null;
+    _sendspinTextSubscription?.cancel();
+    _sendspinTextSubscription = null;
+    _sendspinBinarySubscription?.cancel();
+    _sendspinBinarySubscription = null;
+
+    // Close client sockets
+    await _apiClientSocket?.close();
+    _apiClientSocket = null;
+    await _sendspinClientSocket?.close();
+    _sendspinClientSocket = null;
 
     await _server?.close(force: true);
     _server = null;

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:uuid/uuid.dart';
 import 'package:ensemble/services/remote/signaling_client.dart';
@@ -17,6 +18,7 @@ enum WebRTCConnectionState {
 class WebRTCConnection {
   RTCPeerConnection? _peerConnection;
   RTCDataChannel? _dataChannel;
+  RTCDataChannel? _sendspinDataChannel;
   final SignalingClient _signalingClient = SignalingClient();
   final _uuid = const Uuid();
 
@@ -25,10 +27,14 @@ class WebRTCConnection {
   bool _serverHelloReceived = false;
   Completer<void>? _serverHelloCompleter;
 
-  // Message handling
+  // Message handling for MA API
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _rawMessageController = StreamController<String>.broadcast();
   final Map<String, Completer<Map<String, dynamic>>> _pendingRequests = {};
+
+  // Sendspin message handling (text and binary)
+  final _sendspinTextController = StreamController<String>.broadcast();
+  final _sendspinBinaryController = StreamController<Uint8List>.broadcast();
 
   // Server info
   Map<String, dynamic>? serverInfo;
@@ -41,6 +47,12 @@ class WebRTCConnection {
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
   Stream<String> get rawMessages => _rawMessageController.stream;
   bool get isConnected => _state == WebRTCConnectionState.connected;
+
+  // Sendspin channel streams
+  Stream<String> get sendspinTextMessages => _sendspinTextController.stream;
+  Stream<Uint8List> get sendspinBinaryMessages => _sendspinBinaryController.stream;
+  bool get isSendspinConnected =>
+      _sendspinDataChannel?.state == RTCDataChannelState.RTCDataChannelOpen;
 
   /// Connect to a remote MA server using the Remote Access ID
   Future<bool> connect(String remoteId) async {
@@ -122,13 +134,31 @@ class WebRTCConnection {
 
   /// Send a raw message without waiting for response (for bridge passthrough)
   void sendRaw(String message) {
-    if (_dataChannel == null || _dataChannel!.state != RTCDataChannelState.RTCDataChannelOpen) {
-      DebugLogger().log('WebRTC: Cannot send raw - data channel not open');
+    if (_dataChannel == null) {
+      DebugLogger().log('WebRTC: Cannot send raw - data channel is null');
+      return;
+    }
+
+    final state = _dataChannel!.state;
+    if (state != RTCDataChannelState.RTCDataChannelOpen) {
+      DebugLogger().log('WebRTC: Cannot send raw - data channel state: $state');
       return;
     }
 
     DebugLogger().log('WebRTC: Sending raw: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
     _dataChannel!.send(RTCDataChannelMessage(message));
+  }
+
+  /// Check if the data channel is healthy
+  bool get isDataChannelHealthy {
+    if (_dataChannel == null) return false;
+    return _dataChannel!.state == RTCDataChannelState.RTCDataChannelOpen;
+  }
+
+  /// Get data channel state for debugging
+  String get dataChannelStateDebug {
+    if (_dataChannel == null) return 'null';
+    return _dataChannel!.state.toString();
   }
 
   /// Disconnect from the remote server
@@ -137,9 +167,11 @@ class WebRTCConnection {
 
     _signalingClient.disconnect();
     await _dataChannel?.close();
+    await _sendspinDataChannel?.close();
     await _peerConnection?.close();
 
     _dataChannel = null;
+    _sendspinDataChannel = null;
     _peerConnection = null;
     _pendingRequests.clear();
     _serverHelloReceived = false;
@@ -184,6 +216,14 @@ class WebRTCConnection {
 
       _dataChannel = await _peerConnection!.createDataChannel('ma-api', dataChannelInit);
       _setupDataChannel(_dataChannel!);
+
+      // Create data channel for Sendspin audio streaming
+      final sendspinChannelInit = RTCDataChannelInit()
+        ..ordered = true
+        ..protocol = 'sendspin';
+
+      _sendspinDataChannel = await _peerConnection!.createDataChannel('sendspin', sendspinChannelInit);
+      _setupSendspinDataChannel(_sendspinDataChannel!);
 
       // Create and send offer
       final offer = await _peerConnection!.createOffer();
@@ -278,6 +318,9 @@ class WebRTCConnection {
     if (channel.label == 'ma-api') {
       _dataChannel = channel;
       _setupDataChannel(channel);
+    } else if (channel.label == 'sendspin') {
+      _sendspinDataChannel = channel;
+      _setupSendspinDataChannel(channel);
     }
   }
 
@@ -340,6 +383,65 @@ class WebRTCConnection {
     }
   }
 
+  /// Setup Sendspin data channel for audio streaming
+  void _setupSendspinDataChannel(RTCDataChannel channel) {
+    channel.onDataChannelState = (state) {
+      DebugLogger().log('WebRTC: Sendspin data channel state: $state');
+    };
+
+    channel.onMessage = _onSendspinMessage;
+  }
+
+  /// Handle incoming Sendspin messages (both text and binary)
+  void _onSendspinMessage(RTCDataChannelMessage message) {
+    if (message.isBinary) {
+      // Binary audio data
+      final bytes = message.binary;
+      if (bytes != null && !_sendspinBinaryController.isClosed) {
+        _sendspinBinaryController.add(bytes);
+      }
+    } else {
+      // Text control message (JSON)
+      final text = message.text;
+      DebugLogger().log('WebRTC: Sendspin text message: ${text.substring(0, text.length > 100 ? 100 : text.length)}...');
+      if (!_sendspinTextController.isClosed) {
+        _sendspinTextController.add(text);
+      }
+    }
+  }
+
+  /// Send a text message to Sendspin channel (JSON control messages)
+  void sendSendspinText(String message) {
+    if (_sendspinDataChannel == null) {
+      DebugLogger().log('WebRTC: Cannot send sendspin text - channel is null');
+      return;
+    }
+
+    final state = _sendspinDataChannel!.state;
+    if (state != RTCDataChannelState.RTCDataChannelOpen) {
+      DebugLogger().log('WebRTC: Cannot send sendspin text - channel state: $state');
+      return;
+    }
+
+    _sendspinDataChannel!.send(RTCDataChannelMessage(message));
+  }
+
+  /// Send binary data to Sendspin channel (audio data from local player)
+  void sendSendspinBinary(Uint8List data) {
+    if (_sendspinDataChannel == null) {
+      DebugLogger().log('WebRTC: Cannot send sendspin binary - channel is null');
+      return;
+    }
+
+    final state = _sendspinDataChannel!.state;
+    if (state != RTCDataChannelState.RTCDataChannelOpen) {
+      DebugLogger().log('WebRTC: Cannot send sendspin binary - channel state: $state');
+      return;
+    }
+
+    _sendspinDataChannel!.send(RTCDataChannelMessage.fromBinary(data));
+  }
+
   void _onSignalingError(String error) {
     DebugLogger().log('WebRTC: Signaling error: $error');
     _setState(WebRTCConnectionState.failed);
@@ -372,6 +474,8 @@ class WebRTCConnection {
   void dispose() {
     _messageController.close();
     _rawMessageController.close();
+    _sendspinTextController.close();
+    _sendspinBinaryController.close();
     disconnect();
   }
 }
