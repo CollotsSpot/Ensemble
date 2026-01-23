@@ -25,6 +25,20 @@ enum MAConnectionState {
   error,
 }
 
+/// Wrapper for pending requests with timestamp for age-based cleanup
+class _PendingRequest {
+  final Completer<Map<String, dynamic>> completer;
+  final DateTime createdAt;
+
+  _PendingRequest({required this.completer, DateTime? createdAt})
+      : createdAt = createdAt ?? DateTime.now();
+
+  bool get isStale {
+    const staleThreshold = Duration(minutes: 2);
+    return DateTime.now().difference(createdAt) > staleThreshold;
+  }
+}
+
 class MusicAssistantAPI {
   final String serverUrl;
   final AuthManager authManager;
@@ -38,7 +52,7 @@ class MusicAssistantAPI {
   MAConnectionState _currentState = MAConnectionState.disconnected;
   MAConnectionState get currentConnectionState => _currentState;
 
-  final Map<String, Completer<Map<String, dynamic>>> _pendingRequests = {};
+  final Map<String, _PendingRequest> _pendingRequests = {};
   final Map<String, StreamController<Map<String, dynamic>>> _eventStreams = {};
 
   Completer<void>? _connectionCompleter;
@@ -291,15 +305,15 @@ class MusicAssistantAPI {
 
       // Handle response to a request
       if (messageId != null && _pendingRequests.containsKey(messageId)) {
-        final completer = _pendingRequests.remove(messageId);
+        final pending = _pendingRequests.remove(messageId);
 
         if (data.containsKey('error_code')) {
           _logger.log('Command error: ${data['error_code']} - ${data['details']}');
-          completer!.completeError(
+          pending!.completer.completeError(
             Exception('${data['error_code']}: ${data['details']}'),
           );
         } else {
-          completer!.complete(data);
+          pending!.completer.complete(data);
         }
         return;
       }
@@ -358,6 +372,9 @@ class MusicAssistantAPI {
       }
     }
 
+    // Clean up stale requests before checking limits
+    _cleanupStaleRequests();
+
     // Prevent memory leaks by limiting pending requests
     if (_pendingRequests.length >= NetworkConstants.maxPendingRequests) {
       throw Exception(
@@ -368,7 +385,7 @@ class MusicAssistantAPI {
 
     final messageId = _uuid.v4();
     final completer = Completer<Map<String, dynamic>>();
-    _pendingRequests[messageId] = completer;
+    _pendingRequests[messageId] = _PendingRequest(completer: completer);
 
     final message = {
       'message_id': messageId,
@@ -388,6 +405,27 @@ class MusicAssistantAPI {
       );
     } finally {
       _pendingRequests.remove(messageId);
+    }
+  }
+
+  /// Clean up stale pending requests that have been waiting too long
+  void _cleanupStaleRequests() {
+    final staleIds = <String>[];
+    for (final entry in _pendingRequests.entries) {
+      if (entry.value.isStale && !entry.value.completer.isCompleted) {
+        staleIds.add(entry.key);
+      }
+    }
+    if (staleIds.isNotEmpty) {
+      _logger.log('Cleanup: Removing ${staleIds.length} stale pending requests');
+      for (final id in staleIds) {
+        final pending = _pendingRequests.remove(id);
+        if (pending != null && !pending.completer.isCompleted) {
+          pending.completer.completeError(
+            TimeoutException('Request expired after 2 minutes'),
+          );
+        }
+      }
     }
   }
 
@@ -3769,8 +3807,8 @@ class MusicAssistantAPI {
   /// Cancel all pending requests with an error message
   void _cancelPendingRequests(String reason) {
     for (final entry in _pendingRequests.entries) {
-      if (!entry.value.isCompleted) {
-        entry.value.completeError(Exception(reason));
+      if (!entry.value.completer.isCompleted) {
+        entry.value.completer.completeError(Exception(reason));
       }
     }
     _pendingRequests.clear();

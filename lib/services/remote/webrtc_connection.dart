@@ -173,12 +173,25 @@ class WebRTCConnection {
     _dataChannel = null;
     _sendspinDataChannel = null;
     _peerConnection = null;
-    _pendingRequests.clear();
+
+    // Complete all pending requests with an error before clearing
+    _completePendingRequestsWithError('WebRTC connection disconnected');
+
     _serverHelloReceived = false;
     _serverHelloCompleter = null;
     serverInfo = null;
 
     _setState(WebRTCConnectionState.disconnected);
+  }
+
+  /// Complete all pending requests with an error message
+  void _completePendingRequestsWithError(String reason) {
+    for (final entry in _pendingRequests.entries) {
+      if (!entry.value.isCompleted) {
+        entry.value.completeError(Exception(reason));
+      }
+    }
+    _pendingRequests.clear();
   }
 
   void _setState(WebRTCConnectionState newState) {
@@ -338,7 +351,8 @@ class WebRTCConnection {
           _safeCompleteConnection(true);
         });
       } else if (state == RTCDataChannelState.RTCDataChannelClosed) {
-        DebugLogger().log('WebRTC: Data channel closed');
+        DebugLogger().log('WebRTC: Data channel closed, completing pending requests with error');
+        _completePendingRequestsWithError('Data channel closed');
         _setState(WebRTCConnectionState.disconnected);
       }
     };
@@ -450,7 +464,8 @@ class WebRTCConnection {
   }
 
   void _onPeerDisconnected() {
-    DebugLogger().log('WebRTC: Peer disconnected');
+    DebugLogger().log('WebRTC: Peer disconnected, completing pending requests with error');
+    _completePendingRequestsWithError('Remote peer disconnected');
     _setState(WebRTCConnectionState.disconnected);
     onError?.call('Remote server disconnected');
   }

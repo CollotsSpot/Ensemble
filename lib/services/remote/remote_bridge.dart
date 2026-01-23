@@ -5,6 +5,61 @@ import 'dart:typed_data';
 import 'package:ensemble/services/remote/webrtc_connection.dart';
 import 'package:ensemble/services/debug_logger.dart';
 
+/// Error types for RemoteBridge
+enum RemoteBridgeErrorType {
+  webrtcConnection,
+  signaling,
+  authentication,
+  dataChannel,
+  timeout,
+  unknown,
+}
+
+/// Error information from RemoteBridge
+class RemoteBridgeError {
+  final RemoteBridgeErrorType type;
+  final String message;
+  final DateTime timestamp;
+
+  RemoteBridgeError({
+    required this.type,
+    required this.message,
+    DateTime? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now();
+}
+
+/// Connection state for RemoteBridge
+enum RemoteBridgeState {
+  disconnected,
+  connecting,
+  authenticating,
+  connected,
+  reconnecting,
+  failed,
+}
+
+/// Connection quality metrics
+class ConnectionMetrics {
+  final int requestsSent;
+  final int responsesReceived;
+  final int reconnectionCount;
+  final Duration? lastLatency;
+  final DateTime? lastActivity;
+
+  ConnectionMetrics({
+    required this.requestsSent,
+    required this.responsesReceived,
+    required this.reconnectionCount,
+    this.lastLatency,
+    this.lastActivity,
+  });
+
+  double get successRate {
+    if (requestsSent == 0) return 1.0;
+    return responsesReceived / requestsSent;
+  }
+}
+
 /// A WebRTC-to-WebSocket bridge that allows MusicAssistantAPI to work unchanged
 /// for remote connections. All traffic is tunneled through a local WebSocket server.
 ///
@@ -50,6 +105,12 @@ class RemoteBridge {
   int _sendspinMessagesSent = 0;
   int _sendspinMessagesReceived = 0;
   DateTime? _lastMessageReceived;
+  int _totalReconnections = 0;
+
+  // State tracking
+  RemoteBridgeState _state = RemoteBridgeState.disconnected;
+  final _stateController = StreamController<RemoteBridgeState>.broadcast();
+  final _errorController = StreamController<RemoteBridgeError>.broadcast();
 
   final DebugLogger _logger = DebugLogger();
 
@@ -57,11 +118,39 @@ class RemoteBridge {
   bool get isRunning => _server != null;
   bool get isSendspinReady => _webrtcConnection?.isSendspinConnected ?? false;
   bool get isWebRTCConnected => _webrtcConnection?.isConnected ?? false;
+  RemoteBridgeState get state => _state;
+  Stream<RemoteBridgeState> get stateStream => _stateController.stream;
+  Stream<RemoteBridgeError> get errorStream => _errorController.stream;
+
+  /// Get current connection metrics
+  ConnectionMetrics get metrics => ConnectionMetrics(
+    requestsSent: _apiMessagesSent,
+    responsesReceived: _apiMessagesReceived,
+    reconnectionCount: _totalReconnections,
+    lastActivity: _lastMessageReceived,
+  );
+
+  /// Update state and notify listeners
+  void _setState(RemoteBridgeState newState) {
+    if (_state != newState) {
+      _logger.log('RemoteBridge: State changed: $_state -> $newState');
+      _state = newState;
+      _stateController.add(newState);
+    }
+  }
+
+  /// Emit an error to listeners
+  void _emitError(RemoteBridgeErrorType type, String message) {
+    final error = RemoteBridgeError(type: type, message: message);
+    _logger.log('RemoteBridge: Error [$type]: $message');
+    _errorController.add(error);
+  }
 
   /// Start the bridge and connect to the remote MA server.
   /// Returns the local port number to connect to, or null if failed.
   Future<int?> start(String remoteId, String username, String password) async {
     _logger.log('RemoteBridge: Starting bridge for remote ID: $remoteId');
+    _setState(RemoteBridgeState.connecting);
 
     // Store connection parameters for reconnection
     _remoteId = remoteId;
@@ -83,26 +172,33 @@ class RemoteBridge {
 
       _webrtcConnection!.onError = (error) {
         _logger.log('RemoteBridge: WebRTC error: $error');
+        _emitError(RemoteBridgeErrorType.webrtcConnection, error);
       };
 
       final connected = await _webrtcConnection!.connect(remoteId);
       if (!connected) {
         _logger.log('RemoteBridge: WebRTC connection failed');
+        _setState(RemoteBridgeState.failed);
+        _emitError(RemoteBridgeErrorType.webrtcConnection, 'Failed to connect to remote server');
         await stop();
         return null;
       }
 
       _logger.log('RemoteBridge: WebRTC connected, authenticating...');
+      _setState(RemoteBridgeState.authenticating);
 
       // Step 2: Authenticate with MA
       final authenticated = await _authenticate(username, password);
       if (!authenticated) {
         _logger.log('RemoteBridge: Authentication failed');
+        _setState(RemoteBridgeState.failed);
+        _emitError(RemoteBridgeErrorType.authentication, 'Authentication failed');
         await stop();
         return null;
       }
 
       _logger.log('RemoteBridge: Authentication successful');
+      _setState(RemoteBridgeState.connected);
 
       // Step 3: Cache the server hello (it was already received by WebRTCConnection)
       if (_webrtcConnection!.serverInfo != null) {
@@ -153,6 +249,8 @@ class RemoteBridge {
       return _port;
     } catch (e) {
       _logger.log('RemoteBridge: Start failed: $e');
+      _setState(RemoteBridgeState.failed);
+      _emitError(RemoteBridgeErrorType.unknown, e.toString());
       await stop();
       return null;
     }
@@ -342,17 +440,23 @@ class RemoteBridge {
 
     if (_remoteId == null || _username == null || _password == null) {
       _logger.log('RemoteBridge: No connection parameters, cannot reconnect');
+      _setState(RemoteBridgeState.failed);
+      _emitError(RemoteBridgeErrorType.webrtcConnection, 'Cannot reconnect - no connection parameters');
       _closeAllClients();
       return;
     }
 
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       _logger.log('RemoteBridge: Max reconnect attempts reached, giving up');
+      _setState(RemoteBridgeState.failed);
+      _emitError(RemoteBridgeErrorType.webrtcConnection, 'Max reconnection attempts reached');
       _closeAllClients();
       return;
     }
 
+    _setState(RemoteBridgeState.reconnecting);
     _reconnectAttempts++;
+    _totalReconnections++;
     final delay = _reconnectDelay * _reconnectAttempts; // Exponential backoff
     _logger.log('RemoteBridge: Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s');
 
@@ -444,10 +548,12 @@ class RemoteBridge {
       });
 
       _logger.log('RemoteBridge: ✅ WebRTC reconnection complete');
+      _setState(RemoteBridgeState.connected);
       _isReconnecting = false;
       _reconnectAttempts = 0;
     } catch (e) {
       _logger.log('RemoteBridge: Reconnection error: $e');
+      _emitError(RemoteBridgeErrorType.webrtcConnection, e.toString());
       _isReconnecting = false;
       _scheduleReconnect();
     }
@@ -488,6 +594,7 @@ class RemoteBridge {
   /// Stop the bridge and disconnect from the remote server.
   Future<void> stop() async {
     _logger.log('RemoteBridge: Stopping bridge');
+    _setState(RemoteBridgeState.disconnected);
 
     // Cancel reconnection
     _reconnectTimer?.cancel();
@@ -533,5 +640,12 @@ class RemoteBridge {
     _password = null;
 
     _logger.log('RemoteBridge: Bridge stopped');
+  }
+
+  /// Dispose the bridge and close all stream controllers.
+  void dispose() {
+    stop();
+    _stateController.close();
+    _errorController.close();
   }
 }

@@ -7,6 +7,9 @@ enum ErrorType {
   network,
   playback,
   library,
+  remote,       // Remote connection (WebRTC) errors
+  dataChannel,  // WebRTC data channel errors
+  signaling,    // WebRTC signaling server errors
   unknown,
 }
 
@@ -102,6 +105,41 @@ class ErrorHandler {
       return ErrorInfo(
         type: ErrorType.library,
         userMessage: 'Failed to load content. Please try again.',
+        technicalMessage: error.toString(),
+        canRetry: true,
+      );
+    }
+
+    // WebRTC/Remote connection errors
+    if (errorStr.contains('webrtc') ||
+        errorStr.contains('remote peer') ||
+        errorStr.contains('remote server disconnected')) {
+      return ErrorInfo(
+        type: ErrorType.remote,
+        userMessage: 'Remote connection lost. Attempting to reconnect...',
+        technicalMessage: error.toString(),
+        canRetry: true,
+      );
+    }
+
+    // Data channel errors
+    if (errorStr.contains('data channel') ||
+        errorStr.contains('datachannel')) {
+      return ErrorInfo(
+        type: ErrorType.dataChannel,
+        userMessage: 'Remote data connection failed. Please try reconnecting.',
+        technicalMessage: error.toString(),
+        canRetry: true,
+      );
+    }
+
+    // Signaling errors
+    if (errorStr.contains('signaling') ||
+        errorStr.contains('ice') ||
+        errorStr.contains('peer connection failed')) {
+      return ErrorInfo(
+        type: ErrorType.signaling,
+        userMessage: 'Failed to establish remote connection. Please try again.',
         technicalMessage: error.toString(),
         canRetry: true,
       );

@@ -40,6 +40,10 @@ class SendspinService {
   WebSocketChannel? _channel;
   Timer? _heartbeatTimer;
   Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 10;
+  static const Duration _baseReconnectDelay = Duration(seconds: 3);
+  static const Duration _maxReconnectDelay = Duration(seconds: 60);
 
   // Connection state
   SendspinConnectionState _state = SendspinConnectionState.disconnected;
@@ -279,6 +283,7 @@ class SendspinService {
 
       _logger.log('Sendspin: Connected and registered successfully');
       _updateState(SendspinConnectionState.connected);
+      _resetReconnectAttempts();
       _startHeartbeat();
 
       return true;
@@ -640,12 +645,27 @@ class SendspinService {
     _heartbeatTimer = null;
   }
 
-  /// Schedule reconnection attempt
+  /// Schedule reconnection attempt with exponential backoff
   void _scheduleReconnect() {
     if (_isDisposed) return;
 
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      _logger.log('Sendspin: Max reconnection attempts reached ($_maxReconnectAttempts), giving up');
+      _updateState(SendspinConnectionState.disconnected);
+      return;
+    }
+
+    _reconnectAttempts++;
+
+    // Calculate exponential backoff delay: 3s, 6s, 12s, 24s, 48s, then cap at 60s
+    final delaySeconds = (_baseReconnectDelay.inSeconds * (1 << (_reconnectAttempts - 1)))
+        .clamp(0, _maxReconnectDelay.inSeconds);
+    final delay = Duration(seconds: delaySeconds);
+
+    _logger.log('Sendspin: Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s');
+
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+    _reconnectTimer = Timer(delay, () {
       if (!_isDisposed && _state != SendspinConnectionState.connected) {
         _logger.log('Sendspin: Attempting reconnection...');
         if (_connectedUrl != null) {
@@ -653,6 +673,11 @@ class SendspinService {
         }
       }
     });
+  }
+
+  /// Reset reconnection attempts counter (call on successful connection)
+  void _resetReconnectAttempts() {
+    _reconnectAttempts = 0;
   }
 
   /// Update connection state
