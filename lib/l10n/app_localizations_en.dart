@@ -1162,6 +1162,9 @@ class SEn extends S {
       'Find this in Music Assistant Settings → Remote Access';
 
   @override
+  String get remoteAccessNote => 'For Home Assistant add-on users only';
+
+  @override
   String get pleaseEnterRemoteId => 'Please enter your Remote Access ID';
 
   @override

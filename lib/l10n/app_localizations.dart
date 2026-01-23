@@ -2147,6 +2147,12 @@ abstract class S {
   /// **'Find this in Music Assistant Settings → Remote Access'**
   String get remoteAccessIdHint;
 
+  /// Note about remote access availability
+  ///
+  /// In en, this message translates to:
+  /// **'For Home Assistant add-on users only'**
+  String get remoteAccessNote;
+
   /// Validation message for remote access ID
   ///
   /// In en, this message translates to:

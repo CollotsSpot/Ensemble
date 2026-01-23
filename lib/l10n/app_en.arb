@@ -1675,6 +1675,11 @@
     "description": "Hint for remote access ID field"
   },
 
+  "remoteAccessNote": "For Home Assistant add-on users only",
+  "@remoteAccessNote": {
+    "description": "Note about remote access availability"
+  },
+
   "pleaseEnterRemoteId": "Please enter your Remote Access ID",
   "@pleaseEnterRemoteId": {
     "description": "Validation message for remote access ID"
