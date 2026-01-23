@@ -7,6 +7,7 @@ import 'basic_auth_strategy.dart';
 import 'authelia_strategy.dart';
 import 'ma_auth_strategy.dart';
 import '../debug_logger.dart';
+import '../../constants/network.dart';
 
 /// Central authentication manager
 /// Manages auth strategy selection, auto-detection, and credential lifecycle
@@ -65,16 +66,18 @@ class AuthManager {
     return result;
   }
 
-  /// Normalize a server URL with appropriate protocol
+  /// Normalize a server URL with appropriate protocol and port
+  /// For local IP addresses without an explicit port, defaults to MA port 8095
   String _normalizeUrl(String url) {
-    var baseUrl = url;
+    var baseUrl = url.trim();
+
+    // Check if URL already has a port specified (before adding protocol)
+    // Port can be specified as host:port or after protocol as http://host:port
+    bool hasExplicitPort = _hasExplicitPort(baseUrl);
+
     if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
       // Use http for local IPs, https for domains
-      if (baseUrl.startsWith('192.') ||
-          baseUrl.startsWith('10.') ||
-          baseUrl.startsWith('172.') ||
-          baseUrl == 'localhost' ||
-          baseUrl.startsWith('127.')) {
+      if (_isLocalAddress(baseUrl)) {
         baseUrl = 'http://$baseUrl';
       } else if (baseUrl.endsWith('.ts.net') || baseUrl.contains('.ts.net:')) {
         // Tailscale URLs - default to http:// since VPN tunnel is already encrypted
@@ -84,7 +87,78 @@ class AuthManager {
         baseUrl = 'https://$baseUrl';
       }
     }
+
+    // For local addresses without explicit port, add default MA port
+    // This handles the common case of MA as HAOS add-on where port 8095 is needed
+    if (!hasExplicitPort) {
+      final uri = Uri.parse(baseUrl);
+      if (_isLocalAddress(uri.host)) {
+        baseUrl = Uri(
+          scheme: uri.scheme,
+          host: uri.host,
+          port: NetworkConstants.defaultWsPort,
+          path: uri.path.isEmpty ? null : uri.path,
+        ).toString();
+        _logger.log('🔗 Local address without port - defaulting to MA port ${NetworkConstants.defaultWsPort}');
+      }
+    }
+
     return baseUrl;
+  }
+
+  /// Check if a URL string has an explicit port specified
+  bool _hasExplicitPort(String url) {
+    // Remove protocol if present
+    var hostPart = url;
+    if (hostPart.startsWith('http://')) {
+      hostPart = hostPart.substring(7);
+    } else if (hostPart.startsWith('https://')) {
+      hostPart = hostPart.substring(8);
+    }
+
+    // Remove path if present
+    final pathIndex = hostPart.indexOf('/');
+    if (pathIndex != -1) {
+      hostPart = hostPart.substring(0, pathIndex);
+    }
+
+    // Check for port (host:port pattern)
+    // Need to handle IPv6 addresses like [::1]:8095
+    if (hostPart.startsWith('[')) {
+      // IPv6 address
+      final closeBracket = hostPart.indexOf(']');
+      if (closeBracket != -1 && closeBracket < hostPart.length - 1) {
+        return hostPart[closeBracket + 1] == ':';
+      }
+      return false;
+    } else {
+      // IPv4 or hostname - check for colon followed by digits
+      final colonIndex = hostPart.lastIndexOf(':');
+      if (colonIndex != -1) {
+        final portPart = hostPart.substring(colonIndex + 1);
+        return int.tryParse(portPart) != null;
+      }
+      return false;
+    }
+  }
+
+  /// Check if an address is a local/private address (without protocol)
+  bool _isLocalAddress(String address) {
+    // Remove port if present for checking
+    var host = address;
+    final colonIndex = host.lastIndexOf(':');
+    if (colonIndex != -1 && int.tryParse(host.substring(colonIndex + 1)) != null) {
+      host = host.substring(0, colonIndex);
+    }
+
+    return host.startsWith('192.168.') ||
+        host.startsWith('192.') ||
+        host.startsWith('10.') ||
+        host.startsWith('172.') ||
+        host == 'localhost' ||
+        host.startsWith('127.') ||
+        host.endsWith('.local') ||
+        host.endsWith('.ts.net');
   }
 
   /// Check if a hostname is a local/private IP address
