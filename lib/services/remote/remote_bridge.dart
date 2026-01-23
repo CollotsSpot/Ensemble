@@ -93,8 +93,10 @@ class RemoteBridge {
   String? _password;
   bool _isReconnecting = false;
   int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 5;
-  static const Duration _reconnectDelay = Duration(seconds: 3);
+  DateTime? _lastReconnectAttempt;
+  static const int _maxReconnectAttempts = 10;
+  static const Duration _baseReconnectDelay = Duration(seconds: 2);
+  static const Duration _maxReconnectDelay = Duration(seconds: 60);
 
   // Cached server hello to replay when WS client connects
   String? _cachedServerHello;
@@ -344,23 +346,32 @@ class RemoteBridge {
   void _handleApiConnection(WebSocket socket) {
     _logger.log('RemoteBridge: API client connected');
 
-    // Reject connections if we're in a bad state
+    // If reconnecting, tell client to wait
     if (_isReconnecting) {
       _logger.log('RemoteBridge: Reconnecting, rejecting API client');
       socket.close(4002, 'Remote connection reconnecting');
       return;
     }
 
+    // If in failed state, attempt recovery instead of rejecting
     if (_state == RemoteBridgeState.failed) {
-      _logger.log('RemoteBridge: Failed state, rejecting API client');
-      socket.close(4003, 'Remote connection failed');
+      _logger.log('RemoteBridge: Failed state, attempting recovery for new client');
+      socket.close(4002, 'Remote connection recovering');
+      // Reset reconnect counter and try again
+      _reconnectAttempts = 0;
+      _scheduleReconnect();
       return;
     }
 
-    // Check if WebRTC is healthy - if not, close the connection immediately
+    // Check if WebRTC is healthy - if not, try to recover
     if (_webrtcConnection == null || !_webrtcConnection!.isDataChannelHealthy) {
-      _logger.log('RemoteBridge: WebRTC not ready, closing API client');
-      socket.close(4000, 'Remote connection not available');
+      _logger.log('RemoteBridge: WebRTC not ready, attempting recovery');
+      socket.close(4002, 'Remote connection recovering');
+      // If not already reconnecting, start reconnection
+      if (!_isReconnecting && _state != RemoteBridgeState.reconnecting) {
+        _reconnectAttempts = 0;
+        _scheduleReconnect();
+      }
       return;
     }
 
@@ -512,17 +523,22 @@ class RemoteBridge {
     }
 
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      _logger.log('RemoteBridge: Max reconnect attempts reached, giving up');
+      _logger.log('RemoteBridge: Max reconnect attempts reached, entering failed state (will retry on new client connection)');
       _setState(RemoteBridgeState.failed);
-      _emitError(RemoteBridgeErrorType.webrtcConnection, 'Max reconnection attempts reached');
-      _closeAllClients();
+      _emitError(RemoteBridgeErrorType.webrtcConnection, 'Max reconnection attempts reached - will retry when app reconnects');
+      // Don't close clients here - they're already closed
+      // Bridge stays alive so it can recover when app tries to reconnect
       return;
     }
 
     _setState(RemoteBridgeState.reconnecting);
     _reconnectAttempts++;
     _totalReconnections++;
-    final delay = _reconnectDelay * _reconnectAttempts; // Exponential backoff
+
+    // Exponential backoff: 2s, 4s, 8s, 16s, 32s, 60s (capped)
+    final delaySeconds = (_baseReconnectDelay.inSeconds * (1 << (_reconnectAttempts - 1)))
+        .clamp(0, _maxReconnectDelay.inSeconds);
+    final delay = Duration(seconds: delaySeconds);
     _logger.log('RemoteBridge: Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s');
 
     _reconnectTimer?.cancel();
@@ -533,6 +549,7 @@ class RemoteBridge {
   Future<void> _reconnectWebRTC() async {
     if (_isReconnecting) return;
     _isReconnecting = true;
+    _lastReconnectAttempt = DateTime.now();
 
     _logger.log('RemoteBridge: Attempting WebRTC reconnection...');
 
@@ -642,7 +659,19 @@ class RemoteBridge {
       _logger.log('RemoteBridge: Health check - API DC:$dcState, Sendspin:$sendspinState, WC:$wcState, '
           'API sent:$_apiMessagesSent recv:$_apiMessagesReceived, '
           'Sendspin sent:$_sendspinMessagesSent recv:$_sendspinMessagesReceived, '
-          'lastRecv:${timeSinceLastMsg}s ago');
+          'lastRecv:${timeSinceLastMsg}s ago, state:$_state');
+
+      // Auto-retry if in failed state and enough time has passed (every 60s)
+      if (_state == RemoteBridgeState.failed && !_isReconnecting) {
+        final timeSinceLastAttempt = _lastReconnectAttempt != null
+            ? DateTime.now().difference(_lastReconnectAttempt!).inSeconds
+            : 999;
+        if (timeSinceLastAttempt >= 60) {
+          _logger.log('RemoteBridge: Health check triggering auto-retry from failed state');
+          _reconnectAttempts = 0;
+          _scheduleReconnect();
+        }
+      }
     });
   }
 

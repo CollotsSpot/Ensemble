@@ -115,6 +115,9 @@ class MusicAssistantProvider with ChangeNotifier {
   // Remote bridge for WebRTC tunnel (kept alive for reconnection)
   RemoteBridge? _remoteBridge;
 
+  // Remote mode auto-reconnect timer (retries every 30s when disconnected)
+  Timer? _remoteReconnectTimer;
+
   // PCM audio player for raw Sendspin audio streaming
   PcmAudioPlayer? _pcmAudioPlayer;
 
@@ -1128,9 +1131,11 @@ class MusicAssistantProvider with ChangeNotifier {
             }
 
             // No auth required, initialize immediately
+            _stopRemoteReconnectTimer(); // Stop retry timer on successful connection
             await _initializeAfterConnection();
           } else if (state == MAConnectionState.authenticated) {
             _logger.log('✅ MA authentication successful');
+            _stopRemoteReconnectTimer(); // Stop retry timer on successful connection
             // Now safe to initialize since we're authenticated
             await _initializeAfterConnection();
           } else if (state == MAConnectionState.disconnected) {
@@ -1138,11 +1143,14 @@ class MusicAssistantProvider with ChangeNotifier {
             // Keep showing cached data for instant UI display on reconnect
             // Player list and state will be refreshed when connection is restored
             _logger.log('📡 Disconnected - keeping cached players and data for instant resume');
+            // Start reconnect timer in remote mode
+            _startRemoteReconnectTimer();
           }
         },
         onError: (error) {
           _logger.log('Connection state stream error: $error');
           _connectionState = MAConnectionState.error;
+          _startRemoteReconnectTimer(); // Start retry timer in remote mode
           notifyListeners();
         },
       );
@@ -1941,12 +1949,27 @@ class MusicAssistantProvider with ChangeNotifier {
     if (_connectionState != MAConnectionState.connected &&
         _connectionState != MAConnectionState.authenticated) {
       _logger.log('🔄 Not connected, attempting reconnect to $_serverUrl (remote: $_isRemoteMode)');
-      try {
-        await connectToServer(_serverUrl!, isRemoteMode: _isRemoteMode, remoteCloudUrl: _remoteCloudUrl);
-        _logger.log('🔄 Reconnection successful');
-      } catch (e) {
-        _logger.log('🔄 Reconnection failed: $e');
+
+      // In remote mode, retry multiple times since bridge may be recovering
+      final maxRetries = _isRemoteMode ? 5 : 1;
+      for (var attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await connectToServer(_serverUrl!, isRemoteMode: _isRemoteMode, remoteCloudUrl: _remoteCloudUrl);
+          _logger.log('🔄 Reconnection successful on attempt $attempt');
+          return;
+        } catch (e) {
+          _logger.log('🔄 Reconnection attempt $attempt/$maxRetries failed: $e');
+          if (attempt < maxRetries) {
+            // Exponential backoff: 2s, 4s, 8s, 16s
+            final delay = Duration(seconds: 2 << (attempt - 1));
+            _logger.log('🔄 Retrying in ${delay.inSeconds}s...');
+            await Future.delayed(delay);
+          }
+        }
       }
+      _logger.log('🔄 All reconnection attempts failed');
+      // Start periodic reconnect timer for remote mode
+      _startRemoteReconnectTimer();
     } else {
       _logger.log('🔄 Already connected, verifying connection...');
       try {
@@ -1962,6 +1985,41 @@ class MusicAssistantProvider with ChangeNotifier {
           _logger.log('🔄 Reconnection failed: $reconnectError');
         }
       }
+    }
+  }
+
+  /// Start periodic reconnect timer for remote mode (every 30s)
+  void _startRemoteReconnectTimer() {
+    if (!_isRemoteMode) return;
+    if (_remoteReconnectTimer != null) return; // Already running
+
+    _logger.log('🔄 Starting remote reconnect timer (30s interval)');
+    _remoteReconnectTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (_connectionState == MAConnectionState.connected ||
+          _connectionState == MAConnectionState.authenticated) {
+        _logger.log('🔄 Remote reconnect timer: Already connected, stopping timer');
+        _stopRemoteReconnectTimer();
+        return;
+      }
+
+      _logger.log('🔄 Remote reconnect timer: Attempting reconnection...');
+      try {
+        await connectToServer(_serverUrl!, isRemoteMode: _isRemoteMode, remoteCloudUrl: _remoteCloudUrl);
+        _logger.log('🔄 Remote reconnect timer: Reconnection successful');
+        _stopRemoteReconnectTimer();
+      } catch (e) {
+        _logger.log('🔄 Remote reconnect timer: Reconnection failed: $e');
+        // Timer will fire again in 30s
+      }
+    });
+  }
+
+  /// Stop the remote reconnect timer
+  void _stopRemoteReconnectTimer() {
+    if (_remoteReconnectTimer != null) {
+      _logger.log('🔄 Stopping remote reconnect timer');
+      _remoteReconnectTimer!.cancel();
+      _remoteReconnectTimer = null;
     }
   }
 
@@ -6097,6 +6155,7 @@ class MusicAssistantProvider with ChangeNotifier {
     _sleepTimer?.cancel();
     _sleepTimerDisplayTimer?.cancel();
     _idleServiceTimer?.cancel();
+    _remoteReconnectTimer?.cancel();
     _connectionStateSubscription?.cancel();
     _localPlayerEventSubscription?.cancel();
     _playerUpdatedEventSubscription?.cancel();
