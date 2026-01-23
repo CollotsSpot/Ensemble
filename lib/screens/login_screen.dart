@@ -750,55 +750,59 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _remoteIdController,
-                        style: TextStyle(color: colorScheme.onSurface),
-                        decoration: InputDecoration(
-                          hintText: 'abc123def456',
-                          hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
-                          filled: true,
-                          fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _remoteIdController,
+                          style: TextStyle(color: colorScheme.onSurface),
+                          decoration: InputDecoration(
+                            hintText: 'abc123def456',
+                            hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.38)),
+                            filled: true,
+                            fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.vpn_key_rounded,
+                              color: colorScheme.onSurface.withOpacity(0.54),
+                            ),
                           ),
-                          prefixIcon: Icon(
-                            Icons.vpn_key_rounded,
+                          enabled: !_isConnecting,
+                          keyboardType: TextInputType.text,
+                          textInputAction: TextInputAction.next,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceVariant.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.qr_code_scanner_rounded,
                             color: colorScheme.onSurface.withOpacity(0.54),
                           ),
+                          onPressed: _isConnecting ? null : () async {
+                            final result = await Navigator.of(context).push<String>(
+                              MaterialPageRoute(
+                                builder: (context) => const QrScannerScreen(),
+                              ),
+                            );
+                            if (result != null && result.isNotEmpty) {
+                              _remoteIdController.text = result;
+                            }
+                          },
                         ),
-                        enabled: !_isConnecting,
-                        keyboardType: TextInputType.text,
-                        textInputAction: TextInputAction.next,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceVariant.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: colorScheme.onSurface.withOpacity(0.54),
-                        ),
-                        onPressed: _isConnecting ? null : () async {
-                          final result = await Navigator.of(context).push<String>(
-                            MaterialPageRoute(
-                              builder: (context) => const QrScannerScreen(),
-                            ),
-                          );
-                          if (result != null && result.isNotEmpty) {
-                            _remoteIdController.text = result;
-                          }
-                        },
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 24),
