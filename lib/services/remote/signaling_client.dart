@@ -18,7 +18,7 @@ class SignalingMessageType {
 
 /// ICE server configuration from signaling
 class IceServer {
-  final String urls;
+  final List<String> urls;
   final String? username;
   final String? credential;
 
@@ -29,8 +29,19 @@ class IceServer {
   });
 
   factory IceServer.fromJson(Map<String, dynamic> json) {
+    // Handle urls as either String or List<String>
+    final urlsRaw = json['urls'];
+    final List<String> urls;
+    if (urlsRaw is String) {
+      urls = [urlsRaw];
+    } else if (urlsRaw is List) {
+      urls = urlsRaw.cast<String>();
+    } else {
+      urls = [];
+    }
+
     return IceServer(
-      urls: json['urls'] as String,
+      urls: urls,
       username: json['username'] as String?,
       credential: json['credential'] as String?,
     );
