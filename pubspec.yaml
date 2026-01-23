@@ -41,6 +41,7 @@ dependencies:
   package_info_plus: ^8.0.0
   device_info_plus: ^10.1.0
   share_plus: ^10.1.4
+  mobile_scanner: ^6.0.2
 
   # Audio - Local Playback
   just_audio: ^0.9.36

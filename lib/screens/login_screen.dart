@@ -10,6 +10,7 @@ import '../services/remote/remote_bridge.dart';
 import '../widgets/debug/debug_console.dart';
 import '../l10n/app_localizations.dart';
 import 'home_screen.dart';
+import 'qr_scanner_screen.dart';
 
 enum ConnectionMode { local, remote }
 
@@ -764,6 +765,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icon(
                       Icons.vpn_key_rounded,
                       color: colorScheme.onSurface.withOpacity(0.54),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        Icons.qr_code_scanner_rounded,
+                        color: colorScheme.onSurface.withOpacity(0.54),
+                      ),
+                      onPressed: _isConnecting ? null : () async {
+                        final result = await Navigator.of(context).push<String>(
+                          MaterialPageRoute(
+                            builder: (context) => const QrScannerScreen(),
+                          ),
+                        );
+                        if (result != null && result.isNotEmpty) {
+                          _remoteIdController.text = result;
+                        }
+                      },
                     ),
                   ),
                   enabled: !_isConnecting,

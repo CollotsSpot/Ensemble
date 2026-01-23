@@ -2158,6 +2158,24 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Remote connection failed. Please check your Remote Access ID and credentials.'**
   String get remoteConnectionFailed;
+
+  /// Title for QR code scanner screen
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR Code'**
+  String get scanQrCode;
+
+  /// Instructions for scanning QR code
+  ///
+  /// In en, this message translates to:
+  /// **'Point your camera at the Remote Access QR code in Music Assistant settings'**
+  String get pointCameraAtQr;
+
+  /// Error message when camera permission is denied
+  ///
+  /// In en, this message translates to:
+  /// **'Camera permission is required to scan QR codes'**
+  String get cameraPermissionDenied;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

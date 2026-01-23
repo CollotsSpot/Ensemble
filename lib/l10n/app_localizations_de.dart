@@ -1175,4 +1175,15 @@ class SDe extends S {
   @override
   String get remoteConnectionFailed =>
       'Remote connection failed. Please check your Remote Access ID and credentials.';
+
+  @override
+  String get scanQrCode => 'Scan QR Code';
+
+  @override
+  String get pointCameraAtQr =>
+      'Point your camera at the Remote Access QR code in Music Assistant settings';
+
+  @override
+  String get cameraPermissionDenied =>
+      'Camera permission is required to scan QR codes';
 }

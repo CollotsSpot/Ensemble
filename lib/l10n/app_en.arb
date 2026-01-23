@@ -1683,5 +1683,20 @@
   "remoteConnectionFailed": "Remote connection failed. Please check your Remote Access ID and credentials.",
   "@remoteConnectionFailed": {
     "description": "Error message when remote connection fails"
+  },
+
+  "scanQrCode": "Scan QR Code",
+  "@scanQrCode": {
+    "description": "Title for QR code scanner screen"
+  },
+
+  "pointCameraAtQr": "Point your camera at the Remote Access QR code in Music Assistant settings",
+  "@pointCameraAtQr": {
+    "description": "Instructions for scanning QR code"
+  },
+
+  "cameraPermissionDenied": "Camera permission is required to scan QR codes",
+  "@cameraPermissionDenied": {
+    "description": "Error message when camera permission is denied"
   }
 }
