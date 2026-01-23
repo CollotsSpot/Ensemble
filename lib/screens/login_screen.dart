@@ -748,15 +748,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  S.of(context)!.remoteAccessNote,
-                  style: TextStyle(
-                    color: colorScheme.onBackground.withOpacity(0.6),
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
                 const SizedBox(height: 12),
 
                 IntrinsicHeight(
