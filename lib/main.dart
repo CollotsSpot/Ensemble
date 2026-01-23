@@ -330,7 +330,31 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
                   darkTheme: AppTheme.darkTheme(colorScheme: darkColorScheme),
                   builder: (context, child) {
                     // Wrap entire app with global player overlay
-                    return GlobalPlayerOverlay(child: child ?? const SizedBox.shrink());
+                    // Also include hidden WebView for remote WebRTC bridge
+                    final musicProvider = context.read<MusicAssistantProvider>();
+                    return Stack(
+                      children: [
+                        GlobalPlayerOverlay(child: child ?? const SizedBox.shrink()),
+                        // WebView for WebRTC - must be VISIBLE to avoid Android throttling
+                        // A tiny 4x4 pixel dot at bottom-right, nearly invisible but keeps WebView active
+                        Positioned(
+                          right: 4,
+                          bottom: 4,
+                          child: Container(
+                            width: 4,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.1), // Nearly invisible dot
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: musicProvider.remoteBridgeWebView,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
                   },
                   home: const AppStartup(),
                 ),

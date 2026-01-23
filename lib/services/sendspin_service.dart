@@ -684,7 +684,10 @@ class SendspinService {
   void _updateState(SendspinConnectionState newState) {
     if (_state != newState) {
       _state = newState;
-      _stateController.add(newState);
+      // Don't add events if controller is closed (disposed)
+      if (!_isDisposed) {
+        _stateController.add(newState);
+      }
     }
   }
 

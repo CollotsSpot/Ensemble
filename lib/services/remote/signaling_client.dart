@@ -168,8 +168,13 @@ class SignalingClient {
       DebugLogger().log('Signaling: Received message type: $type');
 
       switch (type) {
+        case SignalingMessageType.ping:
+          // Server is pinging us - respond with pong to keep connection alive
+          _send({'type': SignalingMessageType.pong});
+          break;
+
         case SignalingMessageType.pong:
-          // Ignore pong responses
+          // Ignore pong responses to our pings
           break;
 
         case SignalingMessageType.connected:

@@ -26,7 +26,8 @@ dependencies:
   web_socket_channel: ^2.4.0
   http: ^1.1.0
   cached_network_image: ^3.3.1
-  flutter_webrtc: ^0.12.9
+  flutter_webrtc: ^0.14.1
+  flutter_inappwebview: ^6.0.0
 
   # Storage
   shared_preferences: ^2.2.2
@@ -66,6 +67,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/webrtc_engine.js
 
 flutter_launcher_icons:
   android: true

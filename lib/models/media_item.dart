@@ -31,14 +31,20 @@ class ProviderMapping {
   });
 
   factory ProviderMapping.fromJson(Map<String, dynamic> json) {
+    // Parse in_library field - MA uses 1/0 or true/false
+    // Default to true if not present (items from library_items API are in library)
+    final inLibraryValue = json['in_library'];
+    final inLibrary = inLibraryValue == null
+        ? true  // Default: items fetched from library are in library
+        : inLibraryValue == true || inLibraryValue == 1;
+
     return ProviderMapping(
       itemId: json['item_id'] as String? ?? '',
       providerDomain: json['provider_domain'] as String? ?? '',
       providerInstance: json['provider_instance'] as String? ?? '',
       available: json['available'] as bool? ?? true,
       audioFormat: json['audio_format'] as Map<String, dynamic>?,
-      // Parse in_library field - MA uses 1/0 or true/false
-      inLibrary: json['in_library'] == true || json['in_library'] == 1,
+      inLibrary: inLibrary,
     );
   }
 

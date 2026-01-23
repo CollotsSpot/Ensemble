@@ -5,8 +5,6 @@ import '../services/settings_service.dart';
 import '../services/database_service.dart';
 import '../services/profile_service.dart';
 import '../services/auth/auth_strategy.dart';
-import '../services/debug_logger.dart';
-import '../services/remote/remote_bridge.dart';
 import '../widgets/debug/debug_console.dart';
 import '../l10n/app_localizations.dart';
 import 'home_screen.dart';
@@ -43,9 +41,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Remote connection state
   ConnectionMode _connectionMode = ConnectionMode.local;
-
-  // Static bridge instance - persists across screen transitions
-  static RemoteBridge? _remoteBridge;
 
   @override
   void initState() {
@@ -522,9 +517,9 @@ class _LoginScreenState extends State<LoginScreen> {
     _addDebugLog('Starting remote connection to: $remoteId');
 
     try {
-      // Start the remote bridge
-      _remoteBridge = RemoteBridge();
-      final port = await _remoteBridge!.start(remoteId, username, password);
+      // Start the remote bridge via provider (WebView is already in widget tree)
+      final provider = context.read<MusicAssistantProvider>();
+      final port = await provider.startRemoteBridge(remoteId, username, password);
 
       if (port == null) {
         setState(() {
@@ -542,7 +537,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Connect to the local bridge endpoint
       final serverUrl = 'ws://localhost:$port';
-      final provider = context.read<MusicAssistantProvider>();
 
       _addDebugLog('Connecting to bridge at $serverUrl');
       // Pass remoteId as cloud URL for Sendspin to connect directly

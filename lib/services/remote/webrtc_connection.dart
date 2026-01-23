@@ -26,11 +26,6 @@ class WebRTCConnection {
   Completer<bool>? _connectionCompleter;
   bool _serverHelloReceived = false;
   Completer<void>? _serverHelloCompleter;
-  Timer? _serverHelloTimer;
-
-  // Queue ICE candidates until remote description is set
-  final List<RTCIceCandidate> _pendingIceCandidates = [];
-  bool _remoteDescriptionSet = false;
 
   // Message handling for MA API
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -62,18 +57,12 @@ class WebRTCConnection {
   /// Connect to a remote MA server using the Remote Access ID
   Future<bool> connect(String remoteId) async {
     if (_state == WebRTCConnectionState.connecting) {
-      DebugLogger().log('WebRTC: Already connecting, resetting...');
-      // Reset stuck connection attempt
-      await _resetConnection();
+      DebugLogger().log('WebRTC: Already connecting');
+      return false;
     }
 
     _setState(WebRTCConnectionState.connecting);
     _connectionCompleter = Completer<bool>();
-    _remoteDescriptionSet = false;
-    _pendingIceCandidates.clear();
-    _serverHelloReceived = false;
-    _serverHelloCompleter = null;
-    _serverHelloTimer?.cancel();
 
     try {
       // Set up signaling callbacks
@@ -172,33 +161,6 @@ class WebRTCConnection {
     return _dataChannel!.state.toString();
   }
 
-  /// Reset connection state without changing external state (for retry scenarios)
-  Future<void> _resetConnection() async {
-    DebugLogger().log('WebRTC: Resetting connection');
-
-    _signalingClient.disconnect();
-    await _dataChannel?.close();
-    await _sendspinDataChannel?.close();
-    await _peerConnection?.close();
-
-    _dataChannel = null;
-    _sendspinDataChannel = null;
-    _peerConnection = null;
-
-    _serverHelloTimer?.cancel();
-    _serverHelloTimer = null;
-    _serverHelloReceived = false;
-    _serverHelloCompleter = null;
-    _remoteDescriptionSet = false;
-    _pendingIceCandidates.clear();
-
-    // Complete connection completer if pending
-    if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
-      _connectionCompleter!.complete(false);
-    }
-    _connectionCompleter = null;
-  }
-
   /// Disconnect from the remote server
   Future<void> disconnect() async {
     DebugLogger().log('WebRTC: Disconnecting');
@@ -212,17 +174,11 @@ class WebRTCConnection {
     _sendspinDataChannel = null;
     _peerConnection = null;
 
-    // Cancel server hello timer
-    _serverHelloTimer?.cancel();
-    _serverHelloTimer = null;
-
     // Complete all pending requests with an error before clearing
     _completePendingRequestsWithError('WebRTC connection disconnected');
 
     _serverHelloReceived = false;
     _serverHelloCompleter = null;
-    _remoteDescriptionSet = false;
-    _pendingIceCandidates.clear();
     serverInfo = null;
 
     _setState(WebRTCConnectionState.disconnected);
@@ -250,6 +206,15 @@ class WebRTCConnection {
     DebugLogger().log('WebRTC: Signaling connected, creating peer connection');
 
     try {
+      // Configure Android audio to NOT manage focus since we only use data channels
+      // This prevents flutter_webrtc from interfering with system audio/speakers
+      await AndroidNativeAudioManagement.setAndroidAudioConfiguration(
+        AndroidAudioConfiguration(
+          manageAudioFocus: false,
+        ),
+      );
+      DebugLogger().log('WebRTC: Android audio configured - manageAudioFocus: false');
+
       // Create peer connection with ICE servers
       final config = <String, dynamic>{
         'iceServers': iceServers.map((s) => s.toWebRtcConfig()).toList(),
@@ -274,13 +239,14 @@ class WebRTCConnection {
       _dataChannel = await _peerConnection!.createDataChannel('ma-api', dataChannelInit);
       _setupDataChannel(_dataChannel!);
 
-      // Create data channel for Sendspin audio streaming
-      final sendspinChannelInit = RTCDataChannelInit()
-        ..ordered = true
-        ..protocol = 'sendspin';
-
-      _sendspinDataChannel = await _peerConnection!.createDataChannel('sendspin', sendspinChannelInit);
-      _setupSendspinDataChannel(_sendspinDataChannel!);
+      // TEST: Sendspin channel DISABLED to test if multi-channel bug causes disconnects
+      // If stability improves, the flutter_webrtc multi-channel bug is confirmed
+      DebugLogger().log('WebRTC: ⚠️ TEST BUILD - Sendspin channel DISABLED (single channel mode)');
+      // final sendspinChannelInit = RTCDataChannelInit()
+      //   ..ordered = true
+      //   ..protocol = 'sendspin';
+      // _sendspinDataChannel = await _peerConnection!.createDataChannel('sendspin', sendspinChannelInit);
+      // _setupSendspinDataChannel(_sendspinDataChannel!);
 
       // Create and send offer
       final offer = await _peerConnection!.createOffer();
@@ -306,20 +272,6 @@ class WebRTCConnection {
         answer['type'] as String?,
       );
       await _peerConnection?.setRemoteDescription(description);
-      _remoteDescriptionSet = true;
-
-      // Apply any queued ICE candidates
-      if (_pendingIceCandidates.isNotEmpty) {
-        DebugLogger().log('WebRTC: Applying ${_pendingIceCandidates.length} queued ICE candidates');
-        for (final candidate in _pendingIceCandidates) {
-          try {
-            await _peerConnection?.addCandidate(candidate);
-          } catch (e) {
-            DebugLogger().log('WebRTC: Failed to add queued ICE candidate: $e');
-          }
-        }
-        _pendingIceCandidates.clear();
-      }
     } catch (e) {
       DebugLogger().log('WebRTC: Failed to set remote description: $e');
       _onSignalingError(e.toString());
@@ -345,14 +297,6 @@ class WebRTCConnection {
         candidateData['sdpMid'] as String?,
         candidateData['sdpMLineIndex'] as int?,
       );
-
-      // Queue candidates until remote description is set
-      if (!_remoteDescriptionSet) {
-        DebugLogger().log('WebRTC: Queueing ICE candidate (remote description not set yet)');
-        _pendingIceCandidates.add(candidate);
-        return;
-      }
-
       await _peerConnection?.addCandidate(candidate);
     } catch (e) {
       DebugLogger().log('WebRTC: Failed to add ICE candidate: $e');
@@ -409,34 +353,15 @@ class WebRTCConnection {
 
       if (state == RTCDataChannelState.RTCDataChannelOpen) {
         DebugLogger().log('WebRTC: Data channel open - waiting for server hello...');
-
-        // Only create completer if not already created/completed
-        if (_serverHelloCompleter == null || _serverHelloCompleter!.isCompleted) {
-          _serverHelloCompleter = Completer<void>();
-        }
-
-        // Set up server hello timeout (30 seconds)
-        _serverHelloTimer?.cancel();
-        _serverHelloTimer = Timer(const Duration(seconds: 30), () {
-          if (!_serverHelloReceived && _serverHelloCompleter != null && !_serverHelloCompleter!.isCompleted) {
-            DebugLogger().log('WebRTC: Server hello timeout - connection failed');
-            _serverHelloCompleter!.completeError('Server hello timeout');
-            _onSignalingError('Server hello timeout - remote server did not respond');
-          }
-        });
-
+        // Don't complete yet - wait for server hello
+        _serverHelloCompleter = Completer<void>();
         _serverHelloCompleter!.future.then((_) {
-          _serverHelloTimer?.cancel();
           DebugLogger().log('WebRTC: Server hello received - connection complete!');
           _setState(WebRTCConnectionState.connected);
           _safeCompleteConnection(true);
-        }).catchError((error) {
-          // Timeout or other error handled above
-          DebugLogger().log('WebRTC: Server hello error: $error');
         });
       } else if (state == RTCDataChannelState.RTCDataChannelClosed) {
         DebugLogger().log('WebRTC: Data channel closed, completing pending requests with error');
-        _serverHelloTimer?.cancel();
         _completePendingRequestsWithError('Data channel closed');
         _setState(WebRTCConnectionState.disconnected);
       }
@@ -571,20 +496,11 @@ class WebRTCConnection {
     }
   }
 
-  /// Dispose resources. Note: This schedules disconnect() but doesn't await it.
-  /// For clean shutdown, call disconnect() first and await it.
   void dispose() {
-    // Cancel timers immediately
-    _serverHelloTimer?.cancel();
-    _serverHelloTimer = null;
-
-    // Close stream controllers
     _messageController.close();
     _rawMessageController.close();
     _sendspinTextController.close();
     _sendspinBinaryController.close();
-
-    // Schedule disconnect (can't await in dispose)
     disconnect();
   }
 }

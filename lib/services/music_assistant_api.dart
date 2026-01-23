@@ -3360,6 +3360,16 @@ class MusicAssistantAPI {
       if (path.startsWith('https://')) {
         try {
           final uri = Uri.parse(path);
+
+          // If URL contains imageproxy with a size parameter, replace with requested size
+          if (uri.path.contains('imageproxy') && uri.queryParameters.containsKey('size')) {
+            final newParams = Map<String, String>.from(uri.queryParameters);
+            newParams['size'] = size.toString();
+            final newUri = uri.replace(queryParameters: newParams);
+            _logger.log('🖼️ Remote mode: adjusted imageproxy size to $size from ${uri.host}');
+            return newUri.toString();
+          }
+
           // Check if it's from a known CDN
           for (final domain in externalDomains) {
             if (uri.host.contains(domain)) {
@@ -3372,6 +3382,17 @@ class MusicAssistantAPI {
               return path;
             }
           }
+
+          // Check if it's an Audiobookshelf URL (cover API endpoint)
+          // Audiobookshelf supports ?width=X parameter for resizing
+          if (uri.path.contains('/api/') && uri.path.contains('/cover')) {
+            final newParams = Map<String, String>.from(uri.queryParameters);
+            newParams['width'] = size.toString();
+            final newUri = uri.replace(queryParameters: newParams);
+            _logger.log('🖼️ Remote mode: adjusted Audiobookshelf cover size to $size from ${uri.host}');
+            return newUri.toString();
+          }
+
           // Even if not a known CDN, if it's HTTPS it might work
           _logger.log('🖼️ Remote mode: trying external URL from ${uri.host}');
           return path;

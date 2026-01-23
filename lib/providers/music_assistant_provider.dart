@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart';
 import 'package:audio_service/audio_service.dart' as audio_service;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -113,7 +114,9 @@ class MusicAssistantProvider with ChangeNotifier {
   String? _remoteCloudUrl;
 
   // Remote bridge for WebRTC tunnel (kept alive for reconnection)
-  RemoteBridge? _remoteBridge;
+  // Created early so WebView can be added to widget tree before start()
+  final RemoteBridge _remoteBridge = RemoteBridge();
+  StreamSubscription<RemoteBridgeState>? _remoteBridgeStateSubscription;
 
   // Remote mode auto-reconnect timer (retries every 30s when disconnected)
   Timer? _remoteReconnectTimer;
@@ -157,6 +160,10 @@ class MusicAssistantProvider with ChangeNotifier {
   String? get error => _error;
   bool get isConnected => _connectionState == MAConnectionState.connected ||
                           _connectionState == MAConnectionState.authenticated;
+
+  /// Get the hidden WebView widget for remote bridge WebRTC.
+  /// This MUST be added to the widget tree for remote connections to work.
+  Widget get remoteBridgeWebView => _remoteBridge.buildWebView();
 
   // Library getters with provider filtering applied
   List<Artist> get artists => filterByProvider(_artists);
@@ -866,8 +873,21 @@ class MusicAssistantProvider with ChangeNotifier {
     _logger.log('🔄 Starting remote bridge for reconnection...');
 
     try {
-      _remoteBridge = RemoteBridge();
-      final port = await _remoteBridge!.start(remoteAccessId, username, password);
+      // Use existing bridge instance (WebView is already in widget tree)
+      // Subscribe to bridge state changes for auto-reconnect
+      _remoteBridgeStateSubscription?.cancel();
+      _remoteBridgeStateSubscription = _remoteBridge.stateStream.listen((state) {
+        _logger.log('🔄 RemoteBridge state: $state (API state: $_connectionState)');
+        if (state == RemoteBridgeState.connected &&
+            (_connectionState == MAConnectionState.disconnected ||
+             _connectionState == MAConnectionState.error)) {
+          // Bridge reconnected but API is disconnected - reconnect API immediately
+          _logger.log('🔄 Bridge reconnected, triggering immediate API reconnect');
+          _reconnectApiToBridge();
+        }
+      });
+
+      final port = await _remoteBridge.start(remoteAccessId, username, password);
 
       if (port == null) {
         _logger.log('❌ Remote bridge failed to start');
@@ -887,6 +907,32 @@ class MusicAssistantProvider with ChangeNotifier {
     } catch (e) {
       _logger.log('❌ Remote reconnect error: $e');
       await SettingsService.clearRemoteAccessId();
+    }
+  }
+
+  /// Start the remote bridge for initial connection (called from LoginScreen).
+  /// Returns the local port number to connect to, or null if failed.
+  Future<int?> startRemoteBridge(String remoteId, String username, String password) async {
+    _logger.log('🔄 Starting remote bridge for: $remoteId');
+
+    try {
+      // Subscribe to bridge state changes for auto-reconnect
+      _remoteBridgeStateSubscription?.cancel();
+      _remoteBridgeStateSubscription = _remoteBridge.stateStream.listen((state) {
+        _logger.log('🔄 RemoteBridge state: $state (API state: $_connectionState)');
+        if (state == RemoteBridgeState.connected &&
+            (_connectionState == MAConnectionState.disconnected ||
+             _connectionState == MAConnectionState.error)) {
+          _logger.log('🔄 Bridge reconnected, triggering immediate API reconnect');
+          _reconnectApiToBridge();
+        }
+      });
+
+      final port = await _remoteBridge.start(remoteId, username, password);
+      return port;
+    } catch (e) {
+      _logger.log('❌ Remote bridge start error: $e');
+      return null;
     }
   }
 
@@ -2020,6 +2066,24 @@ class MusicAssistantProvider with ChangeNotifier {
       _logger.log('🔄 Stopping remote reconnect timer');
       _remoteReconnectTimer!.cancel();
       _remoteReconnectTimer = null;
+    }
+  }
+
+  /// Reconnect the API to the existing remote bridge
+  /// Called when RemoteBridge reconnects and API is disconnected
+  Future<void> _reconnectApiToBridge() async {
+    if (_serverUrl == null) {
+      _logger.log('⚠️ No server URL for API reconnect');
+      return;
+    }
+
+    try {
+      _logger.log('🔄 Reconnecting API to bridge at $_serverUrl');
+      await connectToServer(_serverUrl!, isRemoteMode: _isRemoteMode, remoteCloudUrl: _remoteCloudUrl);
+      _logger.log('✅ API reconnected to bridge successfully');
+    } catch (e) {
+      _logger.log('❌ API reconnect to bridge failed: $e');
+      // The 30s timer will try again
     }
   }
 
@@ -6156,6 +6220,7 @@ class MusicAssistantProvider with ChangeNotifier {
     _sleepTimerDisplayTimer?.cancel();
     _idleServiceTimer?.cancel();
     _remoteReconnectTimer?.cancel();
+    _remoteBridgeStateSubscription?.cancel();
     _connectionStateSubscription?.cancel();
     _localPlayerEventSubscription?.cancel();
     _playerUpdatedEventSubscription?.cancel();

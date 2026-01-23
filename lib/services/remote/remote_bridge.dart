@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:ensemble/services/remote/webrtc_connection.dart';
+import 'package:flutter/material.dart';
+import 'package:ensemble/services/remote/webview_webrtc_connection.dart';
 import 'package:ensemble/services/debug_logger.dart';
 
 /// Error types for RemoteBridge
@@ -70,7 +71,7 @@ class ConnectionMetrics {
 /// ```
 class RemoteBridge {
   HttpServer? _server;
-  WebRTCConnection? _webrtcConnection;
+  WebViewWebRTCConnection? _webrtcConnection;
   int? _port;
 
   // API client (MusicAssistantAPI)
@@ -93,10 +94,10 @@ class RemoteBridge {
   String? _password;
   bool _isReconnecting = false;
   int _reconnectAttempts = 0;
-  DateTime? _lastReconnectAttempt;
-  static const int _maxReconnectAttempts = 10;
-  static const Duration _baseReconnectDelay = Duration(seconds: 2);
-  static const Duration _maxReconnectDelay = Duration(seconds: 60);
+  static const int _maxReconnectAttempts = 5;
+  static const Duration _reconnectDelay = Duration(seconds: 3);
+  static const Duration _rateLimitDelay = Duration(seconds: 65);
+  bool _isRateLimited = false;
 
   // Cached server hello to replay when WS client connects
   String? _cachedServerHello;
@@ -123,6 +124,15 @@ class RemoteBridge {
   RemoteBridgeState get state => _state;
   Stream<RemoteBridgeState> get stateStream => _stateController.stream;
   Stream<RemoteBridgeError> get errorStream => _errorController.stream;
+
+  /// Build the hidden WebView widget that must be added to the widget tree.
+  /// This must be called and the returned widget added to the tree BEFORE calling start().
+  /// The WebView is 1x1 pixel and invisible.
+  Widget buildWebView() {
+    // Create the connection if not already created
+    _webrtcConnection ??= WebViewWebRTCConnection();
+    return _webrtcConnection!.buildWebView();
+  }
 
   /// Get current connection metrics
   ConnectionMetrics get metrics => ConnectionMetrics(
@@ -161,13 +171,14 @@ class RemoteBridge {
     _reconnectAttempts = 0;
 
     try {
-      // Step 1: Connect to MA via WebRTC
-      _webrtcConnection = WebRTCConnection();
+      // Step 1: Connect to MA via WebRTC (using WebView-based implementation)
+      // The WebView must be in the widget tree first - call buildWebView() before start()
+      _webrtcConnection ??= WebViewWebRTCConnection();
 
       _webrtcConnection!.onStateChanged = (state) {
         _logger.log('RemoteBridge: WebRTC state: $state');
-        if (state == WebRTCConnectionState.disconnected ||
-            state == WebRTCConnectionState.failed) {
+        if (state == WebViewWebRTCConnectionState.disconnected ||
+            state == WebViewWebRTCConnectionState.failed) {
           _handleWebRTCDisconnection();
         }
       };
@@ -221,7 +232,6 @@ class RemoteBridge {
         _apiMessagesReceived++;
         _lastMessageReceived = DateTime.now();
         if (_apiClientSocket != null) {
-          _logger.log('RemoteBridge: WebRTC API → WS: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
           _apiClientSocket!.add(message);
         }
       });
@@ -231,7 +241,6 @@ class RemoteBridge {
         _sendspinMessagesReceived++;
         _lastMessageReceived = DateTime.now();
         if (_sendspinClientSocket != null) {
-          _logger.log('RemoteBridge: WebRTC Sendspin text → WS: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
           _sendspinClientSocket!.add(message);
         }
       });
@@ -346,35 +355,6 @@ class RemoteBridge {
   void _handleApiConnection(WebSocket socket) {
     _logger.log('RemoteBridge: API client connected');
 
-    // If reconnecting, tell client to wait
-    if (_isReconnecting) {
-      _logger.log('RemoteBridge: Reconnecting, rejecting API client');
-      socket.close(4002, 'Remote connection reconnecting');
-      return;
-    }
-
-    // If in failed state, attempt recovery instead of rejecting
-    if (_state == RemoteBridgeState.failed) {
-      _logger.log('RemoteBridge: Failed state, attempting recovery for new client');
-      socket.close(4002, 'Remote connection recovering');
-      // Reset reconnect counter and try again
-      _reconnectAttempts = 0;
-      _scheduleReconnect();
-      return;
-    }
-
-    // Check if WebRTC is healthy - if not, try to recover
-    if (_webrtcConnection == null || !_webrtcConnection!.isDataChannelHealthy) {
-      _logger.log('RemoteBridge: WebRTC not ready, attempting recovery');
-      socket.close(4002, 'Remote connection recovering');
-      // If not already reconnecting, start reconnection
-      if (!_isReconnecting && _state != RemoteBridgeState.reconnecting) {
-        _reconnectAttempts = 0;
-        _scheduleReconnect();
-      }
-      return;
-    }
-
     // Only allow one API client at a time
     if (_apiClientSocket != null) {
       _logger.log('RemoteBridge: Closing existing API client connection');
@@ -395,7 +375,6 @@ class RemoteBridge {
       (message) {
         if (message is String && _webrtcConnection != null) {
           _apiMessagesSent++;
-          _logger.log('RemoteBridge: API WS → WebRTC: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
           _webrtcConnection!.sendRaw(message);
         }
       },
@@ -432,7 +411,6 @@ class RemoteBridge {
           _sendspinMessagesSent++;
           if (message is String) {
             // Text message (JSON control)
-            _logger.log('RemoteBridge: Sendspin WS text → WebRTC: ${message.substring(0, message.length > 100 ? 100 : message.length)}...');
             _webrtcConnection!.sendSendspinText(message);
           } else if (message is List<int>) {
             // Binary message (would be audio data from client, unlikely but handle it)
@@ -453,58 +431,13 @@ class RemoteBridge {
     );
   }
 
-  /// Handle WebRTC disconnection - notify clients and attempt reconnection.
+  /// Handle WebRTC disconnection - attempt reconnection.
   void _handleWebRTCDisconnection() {
     _logger.log('RemoteBridge: WebRTC disconnected');
 
-    // Notify connected clients that the remote connection is temporarily unavailable
-    // This allows the app to show appropriate UI feedback
-    _notifyClientsOfDisconnection();
-
-    // Close WS clients - they can't do anything useful without WebRTC
-    // The app will show "disconnected" state and auto-reconnect when we're back
-    _closeAllClientsWithError(4001, 'Remote connection lost - reconnecting');
-
-    // Attempt to reconnect WebRTC
+    // Don't close WS clients immediately - they will reconnect when WebRTC is back
+    // Instead, attempt to reconnect WebRTC
     _scheduleReconnect();
-  }
-
-  /// Notify connected clients of disconnection via JSON error message
-  void _notifyClientsOfDisconnection() {
-    final errorMessage = jsonEncode({
-      'error': true,
-      'error_code': 'remote_connection_lost',
-      'details': 'Remote connection lost. Attempting to reconnect...',
-    });
-
-    try {
-      _apiClientSocket?.add(errorMessage);
-    } catch (e) {
-      _logger.log('RemoteBridge: Failed to notify API client: $e');
-    }
-  }
-
-  /// Close all WS clients with an error code and reason
-  void _closeAllClientsWithError(int code, String reason) {
-    _logger.log('RemoteBridge: Closing all WS clients with error: $code - $reason');
-
-    try {
-      _apiClientSocket?.close(code, reason);
-    } catch (e) {
-      _logger.log('RemoteBridge: Error closing API client: $e');
-    }
-    _apiClientSocket = null;
-    _apiClientSubscription?.cancel();
-    _apiClientSubscription = null;
-
-    try {
-      _sendspinClientSocket?.close(code, reason);
-    } catch (e) {
-      _logger.log('RemoteBridge: Error closing Sendspin client: $e');
-    }
-    _sendspinClientSocket = null;
-    _sendspinClientSubscription?.cancel();
-    _sendspinClientSubscription = null;
   }
 
   /// Schedule a WebRTC reconnection attempt.
@@ -523,11 +456,10 @@ class RemoteBridge {
     }
 
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      _logger.log('RemoteBridge: Max reconnect attempts reached, entering failed state (will retry on new client connection)');
+      _logger.log('RemoteBridge: Max reconnect attempts reached, giving up');
       _setState(RemoteBridgeState.failed);
-      _emitError(RemoteBridgeErrorType.webrtcConnection, 'Max reconnection attempts reached - will retry when app reconnects');
-      // Don't close clients here - they're already closed
-      // Bridge stays alive so it can recover when app tries to reconnect
+      _emitError(RemoteBridgeErrorType.webrtcConnection, 'Max reconnection attempts reached');
+      _closeAllClients();
       return;
     }
 
@@ -535,11 +467,15 @@ class RemoteBridge {
     _reconnectAttempts++;
     _totalReconnections++;
 
-    // Exponential backoff: 2s, 4s, 8s, 16s, 32s, 60s (capped)
-    final delaySeconds = (_baseReconnectDelay.inSeconds * (1 << (_reconnectAttempts - 1)))
-        .clamp(0, _maxReconnectDelay.inSeconds);
-    final delay = Duration(seconds: delaySeconds);
-    _logger.log('RemoteBridge: Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s');
+    // Use longer delay if rate limited, otherwise exponential backoff
+    final Duration delay;
+    if (_isRateLimited) {
+      delay = _rateLimitDelay;
+      _logger.log('RemoteBridge: Rate limited - waiting ${delay.inSeconds}s before reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts');
+    } else {
+      delay = _reconnectDelay * _reconnectAttempts;
+      _logger.log('RemoteBridge: Scheduling reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delay.inSeconds}s');
+    }
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, _reconnectWebRTC);
@@ -549,33 +485,38 @@ class RemoteBridge {
   Future<void> _reconnectWebRTC() async {
     if (_isReconnecting) return;
     _isReconnecting = true;
-    _lastReconnectAttempt = DateTime.now();
 
     _logger.log('RemoteBridge: Attempting WebRTC reconnection...');
 
     try {
-      // Clean up old WebRTC connection
+      // Clean up subscriptions but keep the WebView connection (it's still in the widget tree)
       _apiWebrtcSubscription?.cancel();
       _sendspinTextSubscription?.cancel();
       _sendspinBinarySubscription?.cancel();
       await _webrtcConnection?.disconnect();
 
-      // Create new WebRTC connection
-      _webrtcConnection = WebRTCConnection();
+      // Reuse existing WebView connection (WebView is already in widget tree)
+      // If somehow null, create a new one (shouldn't happen in normal flow)
+      _webrtcConnection ??= WebViewWebRTCConnection();
 
       _webrtcConnection!.onStateChanged = (state) {
         _logger.log('RemoteBridge: WebRTC state (reconnect): $state');
-        if (state == WebRTCConnectionState.disconnected ||
-            state == WebRTCConnectionState.failed) {
+        if (state == WebViewWebRTCConnectionState.disconnected ||
+            state == WebViewWebRTCConnectionState.failed) {
           _isReconnecting = false;
           _handleWebRTCDisconnection();
-        } else if (state == WebRTCConnectionState.connected) {
+        } else if (state == WebViewWebRTCConnectionState.connected) {
           _reconnectAttempts = 0; // Reset on successful connection
         }
       };
 
       _webrtcConnection!.onError = (error) {
         _logger.log('RemoteBridge: WebRTC error (reconnect): $error');
+        // Detect rate limiting from signaling server
+        if (error.toLowerCase().contains('rate limit')) {
+          _logger.log('RemoteBridge: Rate limited - will wait ${_rateLimitDelay.inSeconds}s before retry');
+          _isRateLimited = true;
+        }
       };
 
       final connected = await _webrtcConnection!.connect(_remoteId!);
@@ -633,6 +574,7 @@ class RemoteBridge {
       _setState(RemoteBridgeState.connected);
       _isReconnecting = false;
       _reconnectAttempts = 0;
+      _isRateLimited = false;
     } catch (e) {
       _logger.log('RemoteBridge: Reconnection error: $e');
       _emitError(RemoteBridgeErrorType.webrtcConnection, e.toString());
@@ -643,7 +585,17 @@ class RemoteBridge {
 
   /// Close all WS clients (called when giving up on reconnection).
   void _closeAllClients() {
-    _closeAllClientsWithError(4004, 'Remote connection terminated');
+    _logger.log('RemoteBridge: Closing all WS clients');
+
+    _apiClientSocket?.close();
+    _apiClientSocket = null;
+    _apiClientSubscription?.cancel();
+    _apiClientSubscription = null;
+
+    _sendspinClientSocket?.close();
+    _sendspinClientSocket = null;
+    _sendspinClientSubscription?.cancel();
+    _sendspinClientSubscription = null;
   }
 
   /// Start periodic health check to monitor connection state
@@ -659,19 +611,7 @@ class RemoteBridge {
       _logger.log('RemoteBridge: Health check - API DC:$dcState, Sendspin:$sendspinState, WC:$wcState, '
           'API sent:$_apiMessagesSent recv:$_apiMessagesReceived, '
           'Sendspin sent:$_sendspinMessagesSent recv:$_sendspinMessagesReceived, '
-          'lastRecv:${timeSinceLastMsg}s ago, state:$_state');
-
-      // Auto-retry if in failed state and enough time has passed (every 60s)
-      if (_state == RemoteBridgeState.failed && !_isReconnecting) {
-        final timeSinceLastAttempt = _lastReconnectAttempt != null
-            ? DateTime.now().difference(_lastReconnectAttempt!).inSeconds
-            : 999;
-        if (timeSinceLastAttempt >= 60) {
-          _logger.log('RemoteBridge: Health check triggering auto-retry from failed state');
-          _reconnectAttempts = 0;
-          _scheduleReconnect();
-        }
-      }
+          'lastRecv:${timeSinceLastMsg}s ago');
     });
   }
 
