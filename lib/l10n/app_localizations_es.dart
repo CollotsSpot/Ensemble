@@ -153,6 +153,9 @@ class SEs extends S {
   String get discoverAlbums => 'Descubrir álbumes';
 
   @override
+  String get playlistMixes => 'Mezclas de playlists';
+
+  @override
   String get continueListening => 'Continuar escuchando';
 
   @override
@@ -555,6 +558,9 @@ class SEs extends S {
   String get noPlaylistsFound => 'No se encontraron listas de reproducción';
 
   @override
+  String get noPlaylistMixesFound => 'No se encontraron mezclas de playlists';
+
+  @override
   String get queueIsEmpty => 'La cola está vacía';
 
   @override
@@ -686,6 +692,9 @@ class SEs extends S {
 
   @override
   String get showRandomAlbums => 'Mostrar álbumes aleatorios para descubrir';
+
+  @override
+  String get showPlaylistMixes => 'Mostrar mezclas de playlists de proveedores externos';
 
   @override
   String get showAudiobooksInProgress => 'Mostrar audiolibros en progreso';

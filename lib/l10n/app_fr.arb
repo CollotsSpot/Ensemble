@@ -221,6 +221,11 @@
     "description": "Home screen section title"
   },
 
+  "playlistMixes": "Mix de playlists",
+  "@playlistMixes": {
+    "description": "Home screen section title"
+  },
+
   "continueListening": "Continuer l'écoute",
   "@continueListening": {
     "description": "Home screen section title"
@@ -915,6 +920,11 @@
     "description": "Empty playlists"
   },
 
+  "noPlaylistMixesFound": "Aucun mix de playlists trouve",
+  "@noPlaylistMixesFound": {
+    "description": "Empty playlist mixes"
+  },
+
   "queueIsEmpty": "La file d'attente est vide",
   "@queueIsEmpty": {
     "description": "Empty queue"
@@ -1071,6 +1081,7 @@
   "showRecentlyPlayedAlbums": "Afficher les albums écoutes recemment",
   "showRandomArtists": "Afficher des artistes aléatoires a découvrir",
   "showRandomAlbums": "Afficher des albums aléatoires a découvrir",
+  "showPlaylistMixes": "Afficher les mixes de playlists provenant de fournisseurs externes",
   "showAudiobooksInProgress": "Afficher les livres audio en cours",
   "showRandomAudiobooks": "Afficher des livres audio aléatoires a découvrir",
   "showRandomSeries": "Afficher des séries de livres audio aléatoires a découvrir",

@@ -152,6 +152,9 @@ class SDe extends S {
   String get discoverAlbums => 'Alben entdecken';
 
   @override
+  String get playlistMixes => 'Playlist-Mixes';
+
+  @override
   String get continueListening => 'Weiterhoren';
 
   @override
@@ -552,6 +555,9 @@ class SDe extends S {
   String get noPlaylistsFound => 'Keine Wiedergabelisten gefunden';
 
   @override
+  String get noPlaylistMixesFound => 'Keine Playlist-Mixes gefunden';
+
+  @override
   String get queueIsEmpty => 'Warteschlange ist leer';
 
   @override
@@ -681,6 +687,9 @@ class SDe extends S {
 
   @override
   String get showRandomAlbums => 'Zufällige Alben zum Entdecken anzeigen';
+
+  @override
+  String get showPlaylistMixes => 'Playlist-Mixes von externen Anbietern anzeigen';
 
   @override
   String get showAudiobooksInProgress => 'Hörbücher in Bearbeitung anzeigen';

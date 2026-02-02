@@ -16,6 +16,7 @@ import '../widgets/series_row.dart';
 import '../widgets/playlist_row.dart';
 import '../widgets/radio_station_row.dart';
 import '../widgets/podcast_row.dart';
+import '../widgets/mixes_row.dart';
 import '../widgets/common/disconnected_state.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
@@ -34,6 +35,7 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
   bool _showRecentAlbums = true;
   bool _showDiscoverArtists = true;
   bool _showDiscoverAlbums = true;
+  bool _showExternalMixes = false;
   // Favorites rows (default off)
   bool _showFavoriteAlbums = false;
   bool _showFavoriteArtists = false;
@@ -146,6 +148,7 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
     final showRecent = await SettingsService.getShowRecentAlbums();
     final showDiscArtists = await SettingsService.getShowDiscoverArtists();
     final showDiscAlbums = await SettingsService.getShowDiscoverAlbums();
+    final showExternalMixes = await SettingsService.getShowExternalMixes();
     final showFavAlbums = await SettingsService.getShowFavoriteAlbums();
     final showFavArtists = await SettingsService.getShowFavoriteArtists();
     final showFavTracks = await SettingsService.getShowFavoriteTracks();
@@ -161,6 +164,7 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
         _showRecentAlbums = showRecent;
         _showDiscoverArtists = showDiscArtists;
         _showDiscoverAlbums = showDiscAlbums;
+        _showExternalMixes = showExternalMixes;
         _showFavoriteAlbums = showFavAlbums;
         _showFavoriteArtists = showFavArtists;
         _showFavoriteTracks = showFavTracks;
@@ -335,6 +339,7 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
       case 'recent-albums': return _showRecentAlbums;
       case 'discover-artists': return _showDiscoverArtists;
       case 'discover-albums': return _showDiscoverAlbums;
+      case 'external-mixes': return _showExternalMixes;
       case 'continue-listening': return _showContinueListeningAudiobooks;
       case 'discover-audiobooks': return _showDiscoverAudiobooks;
       case 'discover-series': return _showDiscoverSeries;
@@ -444,6 +449,16 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
           title: S.of(context)!.discoverAlbums,
           loadAlbums: () => provider.getDiscoverAlbumsWithCache(),
           getCachedAlbums: () => provider.getCachedDiscoverAlbums(),
+          rowHeight: rowHeight,
+        );
+      case 'external-mixes':
+        if (!_showExternalMixes) return null;
+        return MixesRow(
+          key: const ValueKey('external-mixes'),
+          title: S.of(context)!.playlistMixes,
+          loadMixes: () => provider.getExternalMixesWithCache(),
+          getCachedMixes: () => provider.getCachedExternalMixes(),
+          heroTagSuffix: 'home',
           rowHeight: rowHeight,
         );
       case 'continue-listening':

@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showRecentAlbums = true;
   bool _showDiscoverArtists = true;
   bool _showDiscoverAlbums = true;
+  bool _showExternalMixes = false;
   // Favorites rows (default off)
   bool _showFavoriteAlbums = false;
   bool _showFavoriteArtists = false;
@@ -68,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final showRecent = await SettingsService.getShowRecentAlbums();
     final showDiscArtists = await SettingsService.getShowDiscoverArtists();
     final showDiscAlbums = await SettingsService.getShowDiscoverAlbums();
+    final showExternalMixes = await SettingsService.getShowExternalMixes();
     final showFavAlbums = await SettingsService.getShowFavoriteAlbums();
     final showFavArtists = await SettingsService.getShowFavoriteArtists();
     final showFavTracks = await SettingsService.getShowFavoriteTracks();
@@ -98,6 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showRecentAlbums = showRecent;
         _showDiscoverArtists = showDiscArtists;
         _showDiscoverAlbums = showDiscAlbums;
+        _showExternalMixes = showExternalMixes;
         _showFavoriteAlbums = showFavAlbums;
         _showFavoriteArtists = showFavArtists;
         _showFavoriteTracks = showFavTracks;
@@ -133,6 +136,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return {'title': s.discoverArtists, 'subtitle': s.showRandomArtists};
       case 'discover-albums':
         return {'title': s.discoverAlbums, 'subtitle': s.showRandomAlbums};
+      case 'external-mixes':
+        return {'title': s.playlistMixes, 'subtitle': s.showPlaylistMixes};
       case 'continue-listening':
         return {'title': s.continueListening, 'subtitle': s.showAudiobooksInProgress};
       case 'discover-audiobooks':
@@ -165,6 +170,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return _showDiscoverArtists;
       case 'discover-albums':
         return _showDiscoverAlbums;
+      case 'external-mixes':
+        return _showExternalMixes;
       case 'continue-listening':
         return _showContinueListeningAudiobooks;
       case 'discover-audiobooks':
@@ -203,6 +210,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         case 'discover-albums':
           _showDiscoverAlbums = value;
           SettingsService.setShowDiscoverAlbums(value);
+          break;
+        case 'external-mixes':
+          _showExternalMixes = value;
+          SettingsService.setShowExternalMixes(value);
           break;
         case 'continue-listening':
           _showContinueListeningAudiobooks = value;

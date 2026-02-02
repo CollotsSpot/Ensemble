@@ -362,6 +362,12 @@ abstract class S {
   /// Home screen section title
   ///
   /// In en, this message translates to:
+  /// **'Playlist Mixes'**
+  String get playlistMixes;
+
+  /// Home screen section title
+  ///
+  /// In en, this message translates to:
   /// **'Continue Listening'**
   String get continueListening;
 
@@ -1049,6 +1055,12 @@ abstract class S {
   /// **'No playlists found'**
   String get noPlaylistsFound;
 
+  /// Empty playlist mixes
+  ///
+  /// In en, this message translates to:
+  /// **'No playlist mixes found'**
+  String get noPlaylistMixesFound;
+
   /// Empty queue
   ///
   /// In en, this message translates to:
@@ -1300,6 +1312,12 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Show random albums to discover'**
   String get showRandomAlbums;
+
+  /// No description provided for @showPlaylistMixes.
+  ///
+  /// In en, this message translates to:
+  /// **'Show playlist mixes from external providers'**
+  String get showPlaylistMixes;
 
   /// No description provided for @showAudiobooksInProgress.
   ///

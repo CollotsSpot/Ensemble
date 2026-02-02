@@ -149,6 +149,9 @@ class SEn extends S {
   String get discoverAlbums => 'Discover Albums';
 
   @override
+  String get playlistMixes => 'Playlist Mixes';
+
+  @override
   String get continueListening => 'Continue Listening';
 
   @override
@@ -547,6 +550,9 @@ class SEn extends S {
   String get noPlaylistsFound => 'No playlists found';
 
   @override
+  String get noPlaylistMixesFound => 'No playlist mixes found';
+
+  @override
   String get queueIsEmpty => 'Queue is empty';
 
   @override
@@ -675,6 +681,9 @@ class SEn extends S {
 
   @override
   String get showRandomAlbums => 'Show random albums to discover';
+
+  @override
+  String get showPlaylistMixes => 'Show playlist mixes from external providers';
 
   @override
   String get showAudiobooksInProgress => 'Show audiobooks in progress';

@@ -10,6 +10,29 @@ enum MediaType {
   podcastEpisode,
 }
 
+/// Parse a media item JSON map into the appropriate model type.
+MediaItem parseMediaItemJson(Map<String, dynamic> json) {
+  final mediaTypeStr = (json['media_type'] as String?)?.toLowerCase();
+  switch (mediaTypeStr) {
+    case 'artist':
+      return Artist.fromJson(json);
+    case 'album':
+      return Album.fromJson(json);
+    case 'track':
+      return Track.fromJson(json);
+    case 'playlist':
+      return Playlist.fromJson(json);
+    case 'audiobook':
+      return Audiobook.fromJson(json);
+    case 'radio':
+      return MediaItem.fromJson(json);
+    case 'podcast':
+    case 'podcast_episode':
+    default:
+      return MediaItem.fromJson(json);
+  }
+}
+
 class ProviderMapping {
   final String itemId;
   final String providerDomain;

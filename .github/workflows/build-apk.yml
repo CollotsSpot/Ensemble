@@ -7,12 +7,13 @@ on:
       - master
       - 'claude/**'
       - 'feature/**'
+      - 'feat/**'
   pull_request:
     branches:
       - main
       - master
   workflow_dispatch:
-
+#
 jobs:
   build:
     name: Build APK
@@ -61,27 +62,24 @@ jobs:
         run: flutter analyze
         continue-on-error: true
 
-      - name: Setup signing keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
-          cat > android/key.properties << EOF
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=upload-keystore.jks
-          EOF
-
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --debug
 
-      - name: Upload APK artifact
+      # Upload whatever APKs were produced (universal + any ABI splits)
+      - name: Upload APK artifact(s)
         uses: actions/upload-artifact@v4
         with:
           name: ensemble-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            build/app/outputs/flutter-apk/*.apk
+            build/app/outputs/apk/**/*.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload APK summary
         run: |
           echo "## APK Build Successful!" >> $GITHUB_STEP_SUMMARY
-          ls -lh build/app/outputs/flutter-apk/app-release.apk >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### APKs:" >> $GITHUB_STEP_SUMMARY
+          ls -lh build/app/outputs/flutter-apk/*.apk 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
+          ls -lh build/app/outputs/apk/**/*.apk 2>/dev/null >> $GITHUB_STEP_SUMMARY || true

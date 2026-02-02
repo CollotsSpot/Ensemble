@@ -20,12 +20,14 @@ class CacheService {
   List<Album>? _cachedRecentAlbums;
   List<Artist>? _cachedDiscoverArtists;
   List<Album>? _cachedDiscoverAlbums;
+  List<MediaItem>? _cachedExternalMixes;
   List<Audiobook>? _cachedInProgressAudiobooks;
   List<Audiobook>? _cachedDiscoverAudiobooks;
   List<AudiobookSeries>? _cachedDiscoverSeries;
   DateTime? _recentAlbumsLastFetched;
   DateTime? _discoverArtistsLastFetched;
   DateTime? _discoverAlbumsLastFetched;
+  DateTime? _externalMixesLastFetched;
   DateTime? _inProgressAudiobooksLastFetched;
   DateTime? _discoverAudiobooksLastFetched;
   DateTime? _discoverSeriesLastFetched;
@@ -118,6 +120,27 @@ class CacheService {
     _persistHomeRowToDatabase('discover_albums', albums.map((a) => a.toJson()).toList());
   }
 
+  /// Check if external mixes cache is valid
+  bool isExternalMixesCacheValid({bool forceRefresh = false}) {
+    if (forceRefresh) return false;
+    final now = DateTime.now();
+    return _cachedExternalMixes != null &&
+        _externalMixesLastFetched != null &&
+        now.difference(_externalMixesLastFetched!) < Timings.homeRowCacheDuration;
+  }
+
+  /// Get cached external mixes
+  List<MediaItem>? getCachedExternalMixes() => _cachedExternalMixes;
+
+  /// Set cached external mixes
+  void setCachedExternalMixes(List<MediaItem> mixes) {
+    _cachedExternalMixes = mixes;
+    _externalMixesLastFetched = DateTime.now();
+    _logger.log('✅ Cached ${mixes.length} external mixes');
+    // Persist to database for instant load on next launch
+    _persistHomeRowToDatabase('external_mixes', mixes.map((m) => m.toJson()).toList());
+  }
+
   /// Check if in-progress audiobooks cache is valid
   bool isInProgressAudiobooksCacheValid({bool forceRefresh = false}) {
     if (forceRefresh) return false;
@@ -191,6 +214,7 @@ class CacheService {
     _recentAlbumsLastFetched = null;
     _discoverArtistsLastFetched = null;
     _discoverAlbumsLastFetched = null;
+    _externalMixesLastFetched = null;
     _inProgressAudiobooksLastFetched = null;
     _discoverAudiobooksLastFetched = null;
     _discoverSeriesLastFetched = null;
@@ -220,6 +244,8 @@ class CacheService {
     _discoverArtistsLastFetched = null;
     _cachedDiscoverAlbums = null;
     _discoverAlbumsLastFetched = null;
+    _cachedExternalMixes = null;
+    _externalMixesLastFetched = null;
     _cachedRecentAlbums = null;
     _recentAlbumsLastFetched = null;
     _searchCache.clear();
@@ -497,6 +523,21 @@ class CacheService {
           _logger.log('📦 Loaded ${items.length} discover albums from database');
         } catch (e) {
           _logger.log('⚠️ Failed to parse discover albums: $e');
+        }
+      }
+
+      // Load external mixes
+      final mixesData = await DatabaseService.instance.getHomeRowCache('external_mixes');
+      if (mixesData != null) {
+        try {
+          final items = (jsonDecode(mixesData.itemsJson) as List)
+              .map((json) => parseMediaItemJson(json as Map<String, dynamic>))
+              .toList();
+          _cachedExternalMixes = items;
+          _externalMixesLastFetched = mixesData.lastUpdated;
+          _logger.log('📦 Loaded ${items.length} external mixes from database');
+        } catch (e) {
+          _logger.log('⚠️ Failed to parse external mixes: $e');
         }
       }
     } catch (e) {

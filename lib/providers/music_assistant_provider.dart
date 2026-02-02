@@ -9,6 +9,7 @@ import '../models/media_item.dart';
 import '../models/player.dart';
 import '../models/provider_instance.dart';
 import '../models/provider_manifest.dart';
+import '../models/recommendation_folder.dart';
 import '../services/music_assistant_api.dart';
 import '../services/settings_service.dart';
 import '../services/debug_logger.dart';
@@ -3176,6 +3177,70 @@ class MusicAssistantProvider with ChangeNotifier {
     }
   }
 
+  Future<List<MediaItem>> getExternalMixesWithCache({bool forceRefresh = false}) async {
+    if (_cacheService.isExternalMixesCacheValid(forceRefresh: forceRefresh)) {
+      _logger.log('📦 Using cached external mixes');
+      return _cacheService.getCachedExternalMixes()!;
+    }
+
+    if (_api == null) return _cacheService.getCachedExternalMixes() ?? [];
+
+    try {
+      _logger.log('🔄 Fetching external mixes...');
+      final recommendations = await _api!.getRecommendations();
+      final mixes = _extractExternalMixes(recommendations);
+      final filtered = filterByProvider(mixes);
+      _cacheService.setCachedExternalMixes(filtered);
+      return filtered;
+    } catch (e) {
+      _logger.log('❌ Failed to fetch external mixes: $e');
+      return _cacheService.getCachedExternalMixes() ?? [];
+    }
+  }
+
+  List<MediaItem> _extractExternalMixes(List<RecommendationFolder> folders) {
+    final mixes = <MediaItem>[];
+
+    for (final folder in folders) {
+      for (final item in folder.items) {
+        if (item.mediaType != MediaType.playlist && item.mediaType != MediaType.radio) {
+          continue;
+        }
+        if (_isExternalMixItem(item)) {
+          mixes.add(item);
+        }
+      }
+    }
+
+    return _deduplicateMixes(mixes);
+  }
+
+  bool _isExternalMixItem(MediaItem item) {
+    final provider = item.provider.toLowerCase();
+    if (provider != 'library' && provider != 'filesystem') {
+      return true;
+    }
+
+    final mappings = item.providerMappings;
+    if (mappings != null) {
+      return mappings.any((m) {
+        final domain = m.providerDomain.toLowerCase();
+        return domain.isNotEmpty && domain != 'library' && domain != 'filesystem';
+      });
+    }
+
+    return false;
+  }
+
+  List<MediaItem> _deduplicateMixes(List<MediaItem> mixes) {
+    final Map<String, MediaItem> deduped = {};
+    for (final mix in mixes) {
+      final key = '${mix.provider}:${mix.itemId}';
+      deduped.putIfAbsent(key, () => mix);
+    }
+    return deduped.values.toList();
+  }
+
   void invalidateHomeCache() {
     _cacheService.invalidateHomeCache();
   }
@@ -3188,6 +3253,9 @@ class MusicAssistantProvider with ChangeNotifier {
 
   /// Get cached discover albums synchronously (for instant display)
   List<Album>? getCachedDiscoverAlbums() => _cacheService.getCachedDiscoverAlbums();
+
+  /// Get cached external mixes synchronously (for instant display)
+  List<MediaItem>? getCachedExternalMixes() => _cacheService.getCachedExternalMixes();
 
   /// Force a full library sync (for pull-to-refresh)
   Future<void> forceLibrarySync() async {

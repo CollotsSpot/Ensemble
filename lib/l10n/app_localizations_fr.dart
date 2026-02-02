@@ -154,6 +154,9 @@ class SFr extends S {
   String get discoverAlbums => 'Découvrir des albums';
 
   @override
+  String get playlistMixes => 'Mix de playlists';
+
+  @override
   String get continueListening => 'Continuer l\'écoute';
 
   @override
@@ -556,6 +559,9 @@ class SFr extends S {
   String get noPlaylistsFound => 'Aucune playlist trouvee';
 
   @override
+  String get noPlaylistMixesFound => 'Aucun mix de playlists trouve';
+
+  @override
   String get queueIsEmpty => 'La file d\'attente est vide';
 
   @override
@@ -688,6 +694,9 @@ class SFr extends S {
 
   @override
   String get showRandomAlbums => 'Afficher des albums aléatoires a découvrir';
+
+  @override
+  String get showPlaylistMixes => 'Afficher les mixes de playlists provenant de fournisseurs externes';
 
   @override
   String get showAudiobooksInProgress => 'Afficher les livres audio en cours';

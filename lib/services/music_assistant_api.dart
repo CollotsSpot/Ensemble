@@ -10,6 +10,7 @@ import '../models/media_item.dart';
 import '../models/player.dart';
 import '../models/provider_instance.dart';
 import '../models/provider_manifest.dart';
+import '../models/recommendation_folder.dart';
 import 'debug_logger.dart';
 import 'settings_service.dart';
 import 'device_id_service.dart';
@@ -412,7 +413,8 @@ class MusicAssistantAPI {
         args: args,
       );
 
-      final items = response['result'] as List<dynamic>?;
+      final items = response['result'] as List<dynamic>? ??
+          response['items'] as List<dynamic>?;
       if (items == null) {
         return [];
       }
@@ -588,6 +590,28 @@ class MusicAssistantAPI {
           .toList();
     } catch (e) {
       _logger.log('Error searching radio stations: $e');
+      return [];
+    }
+  }
+
+  // ============ RECOMMENDATIONS ============
+
+  /// Get recommendation folders (mixes, recommendations, etc.)
+  Future<List<RecommendationFolder>> getRecommendations() async {
+    try {
+      final response = await _sendCommand(
+        'music/recommendations',
+      );
+
+      final items = response['result'] as List<dynamic>?;
+      if (items == null) return [];
+
+      return items
+          .whereType<Map<String, dynamic>>()
+          .map(RecommendationFolder.fromJson)
+          .toList();
+    } catch (e) {
+      _logger.log('Error getting recommendations: $e');
       return [];
     }
   }
