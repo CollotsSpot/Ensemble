@@ -63,7 +63,7 @@ jobs:
         continue-on-error: true
 
       - name: Build APK
-        run: flutter build apk --debug
+        run: flutter build apk --release
 
       # Upload whatever APKs were produced (universal + any ABI splits)
       - name: Upload APK artifact(s)
