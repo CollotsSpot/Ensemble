@@ -360,7 +360,10 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
       builder: (context, constraints) {
         // Each row is always 1/3 of screen height
         // 1 row = 1/3, 2 rows = 2/3, 3 rows = full screen, 4+ rows scroll
-        final availableHeight = constraints.maxHeight - BottomSpacing.withMiniPlayer;
+        final maxHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : MediaQuery.of(context).size.height;
+        final availableHeight = (maxHeight - BottomSpacing.withMiniPlayer).clamp(0.0, double.infinity);
 
         // Account for margins between rows (2px each)
         // Only adjust for margins when ≤3 rows (so they fit exactly without scroll)
@@ -368,7 +371,8 @@ class _NewHomeScreenState extends State<NewHomeScreen> with AutomaticKeepAliveCl
         const marginSize = 2.0;
         final enabledRows = _countEnabledRows();
         final marginsInView = enabledRows > 1 && enabledRows <= 3 ? (enabledRows - 1) * marginSize : 0.0;
-        final rowHeight = (availableHeight - marginsInView) / 3;
+        final rawRowHeight = (availableHeight - marginsInView) / 3;
+        final rowHeight = rawRowHeight.isFinite && rawRowHeight > 0 ? rawRowHeight : 237.0;
 
         // Use Android 12+ stretch overscroll effect
         return NotificationListener<ScrollNotification>(
