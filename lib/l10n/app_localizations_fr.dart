@@ -154,7 +154,7 @@ class SFr extends S {
   String get discoverAlbums => 'Découvrir des albums';
 
   @override
-  String get playlistMixes => 'Mix de playlists';
+  String get playlistMixes => 'Découvrir des playlists';
 
   @override
   String get continueListening => 'Continuer l\'écoute';

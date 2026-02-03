@@ -149,7 +149,7 @@ class SEn extends S {
   String get discoverAlbums => 'Discover Albums';
 
   @override
-  String get playlistMixes => 'Playlist Mixes';
+  String get playlistMixes => 'Discover Playlists';
 
   @override
   String get continueListening => 'Continue Listening';

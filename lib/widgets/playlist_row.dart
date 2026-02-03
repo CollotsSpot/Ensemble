@@ -107,7 +107,7 @@ class _PlaylistRowState extends State<PlaylistRow> with AutomaticKeepAliveClient
 
     // Card layout: square artwork + text below (same as AlbumRow)
     // Text area: 8px gap + ~18px title + ~18px owner = ~44px
-    const textAreaHeight = 44.0;
+    const textAreaHeight = 52.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize; // Card width = artwork width (square)
     final itemExtent = cardWidth + 12; // width + horizontal margins
@@ -152,7 +152,7 @@ class _PlaylistRowState extends State<PlaylistRow> with AutomaticKeepAliveClient
 
     // Total row height includes title + content (same as AlbumRow)
     final totalHeight = widget.rowHeight ?? 237.0; // Default: 44 title + 193 content
-    const titleHeight = 44.0; // 12 top padding + ~24 text + 8 bottom padding
+    const titleHeight = 52.0; // 12 top padding + ~24 text + 8 bottom padding
     final contentHeight = totalHeight - titleHeight;
 
     final result = RepaintBoundary(

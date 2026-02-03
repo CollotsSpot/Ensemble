@@ -379,6 +379,15 @@ class Playlist extends MediaItem {
     if (provider == 'library') return true;
     return providerMappings?.any((m) => m.providerInstance == 'library') ?? false;
   }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    if (owner != null) json['owner'] = owner;
+    if (isEditable != null) json['is_editable'] = isEditable;
+    if (trackCount != null) json['track_count'] = trackCount;
+    return json;
+  }
 }
 
 class Chapter {

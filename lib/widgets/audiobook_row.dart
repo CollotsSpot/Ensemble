@@ -121,7 +121,7 @@ class _AudiobookRowState extends State<AudiobookRow> with AutomaticKeepAliveClie
       );
     }
 
-    const textAreaHeight = 44.0;
+    const textAreaHeight = 52.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize;
     final itemExtent = cardWidth + 12;
@@ -162,7 +162,7 @@ class _AudiobookRowState extends State<AudiobookRow> with AutomaticKeepAliveClie
     final maProvider = context.read<MusicAssistantProvider>();
 
     final totalHeight = widget.rowHeight ?? 237.0;
-    const titleHeight = 44.0;
+    const titleHeight = 52.0;
     final contentHeight = totalHeight - titleHeight;
 
     final result = RepaintBoundary(

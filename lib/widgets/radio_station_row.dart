@@ -107,7 +107,7 @@ class _RadioStationRowState extends State<RadioStationRow> with AutomaticKeepAli
 
     // Card layout: circle image + name below (same as ArtistRow)
     // Text area: 8px gap + ~36px for 2-line name = ~44px
-    const textAreaHeight = 44.0;
+    const textAreaHeight = 52.0;
     final imageSize = contentHeight - textAreaHeight;
     final cardWidth = imageSize; // Card width = image width (circle)
     final itemExtent = cardWidth + 16; // width + horizontal margins
@@ -148,7 +148,7 @@ class _RadioStationRowState extends State<RadioStationRow> with AutomaticKeepAli
 
     // Total row height includes title + content (same as ArtistRow)
     final totalHeight = widget.rowHeight ?? 207.0; // Default: 44 title + 163 content
-    const titleHeight = 44.0; // 12 top padding + ~24 text + 8 bottom padding
+    const titleHeight = 52.0; // 12 top padding + ~24 text + 8 bottom padding
     final contentHeight = totalHeight - titleHeight;
 
     final result = RepaintBoundary(

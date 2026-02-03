@@ -30,4 +30,14 @@ class RecommendationFolder {
       items: parsedItems,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'item_id': itemId,
+      'provider': provider,
+      'name': name,
+      if (uri != null) 'uri': uri,
+      'items': items.map((item) => item.toJson()).toList(),
+    };
+  }
 }

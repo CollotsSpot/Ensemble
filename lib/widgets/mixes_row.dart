@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
 import '../models/media_item.dart';
+import '../models/recommendation_folder.dart';
 import '../providers/music_assistant_provider.dart';
 import '../services/debug_logger.dart';
 import 'playlist_card.dart';
@@ -10,8 +11,8 @@ import 'radio_station_card.dart';
 
 class MixesRow extends StatefulWidget {
   final String title;
-  final Future<List<MediaItem>> Function() loadMixes;
-  final List<MediaItem>? Function()? getCachedMixes;
+  final Future<List<RecommendationFolder>> Function() loadMixes;
+  final List<RecommendationFolder>? Function()? getCachedMixes;
   final String? heroTagSuffix;
   final double? rowHeight;
 
@@ -29,7 +30,7 @@ class MixesRow extends StatefulWidget {
 }
 
 class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin {
-  List<MediaItem> _mixes = [];
+  List<RecommendationFolder> _mixes = [];
   bool _isLoading = true;
   bool _hasLoaded = false;
 
@@ -71,13 +72,17 @@ class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin 
     }
   }
 
-  void _precacheMixImages(List<MediaItem> mixes) {
+  void _precacheMixImages(List<RecommendationFolder> mixes) {
     if (!mounted) return;
     final maProvider = context.read<MusicAssistantProvider>();
 
-    final mixesToCache = mixes.take(10);
+    final itemsToCache = <MediaItem>[];
+    for (final folder in mixes) {
+      itemsToCache.addAll(folder.items);
+      if (itemsToCache.length >= 10) break;
+    }
 
-    for (final mix in mixesToCache) {
+    for (final mix in itemsToCache.take(10)) {
       final imageUrl = maProvider.api?.getImageUrl(mix, size: 256);
       if (imageUrl != null) {
         precacheImage(
@@ -88,21 +93,8 @@ class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin 
     }
   }
 
-  Widget _buildContent(double contentHeight, ColorScheme colorScheme) {
-    if (_mixes.isEmpty && _isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_mixes.isEmpty) {
-      return Center(
-        child: Text(
-          S.of(context)!.noPlaylistMixesFound,
-          style: TextStyle(color: colorScheme.onSurface.withOpacity(0.5)),
-        ),
-      );
-    }
-
-    const textAreaHeight = 44.0;
+  Widget _buildShelfContent(List<MediaItem> items, double contentHeight) {
+    const textAreaHeight = 52.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize;
     final itemExtent = cardWidth + 12;
@@ -113,13 +105,13 @@ class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin 
         clipBehavior: Clip.none,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12.0),
-        itemCount: _mixes.length,
+        itemCount: items.length,
         itemExtent: itemExtent,
         cacheExtent: 500,
         addAutomaticKeepAlives: false,
         addRepaintBoundaries: false,
         itemBuilder: (context, index) {
-          final mix = _mixes[index];
+          final mix = items[index];
           final key = ValueKey(mix.uri ?? mix.itemId);
 
           Widget card;
@@ -160,31 +152,68 @@ class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin 
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
-    final totalHeight = widget.rowHeight ?? 237.0;
-    const titleHeight = 44.0;
-    final contentHeight = totalHeight - titleHeight;
+    final baseRowHeight = widget.rowHeight ?? 237.0;
+    const titleHeight = 52.0;
+    final contentHeight = baseRowHeight - titleHeight;
 
     final result = RepaintBoundary(
-      child: SizedBox(
-        height: totalHeight,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
-              child: Text(
-                widget.title,
-                style: textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onBackground,
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
+            child: Text(
+              widget.title,
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onBackground,
               ),
             ),
-            Expanded(
-              child: _buildContent(contentHeight, colorScheme),
-            ),
-          ],
-        ),
+          ),
+          if (_mixes.isEmpty && _isLoading)
+            SizedBox(
+              height: baseRowHeight - titleHeight,
+              child: const Center(child: CircularProgressIndicator()),
+            )
+          else if (_mixes.isEmpty)
+            SizedBox(
+              height: baseRowHeight - titleHeight,
+              child: Center(
+                child: Text(
+                  S.of(context)!.noPlaylistMixesFound,
+                  style: TextStyle(color: colorScheme.onSurface.withOpacity(0.5)),
+                ),
+              ),
+            )
+          else
+            ..._mixes.map((folder) {
+              return SizedBox(
+                height: baseRowHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
+                      child: Text(
+                        folder.name,
+                        style: textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onBackground,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildShelfContent(folder.items, contentHeight),
+                    ),
+                  ],
+                ),
+              );
+            }).expand((widget) sync* {
+              yield widget;
+              yield const SizedBox(height: 8.0);
+            }).toList()
+              ..removeLast(),
+        ],
       ),
     );
     _logger.endBuild('MixesRow:${widget.title}');

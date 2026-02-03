@@ -3177,7 +3177,7 @@ class MusicAssistantProvider with ChangeNotifier {
     }
   }
 
-  Future<List<MediaItem>> getExternalMixesWithCache({bool forceRefresh = false}) async {
+  Future<List<RecommendationFolder>> getExternalMixesWithCache({bool forceRefresh = false}) async {
     if (_cacheService.isExternalMixesCacheValid(forceRefresh: forceRefresh)) {
       _logger.log('📦 Using cached external mixes');
       return _cacheService.getCachedExternalMixes()!;
@@ -3189,30 +3189,36 @@ class MusicAssistantProvider with ChangeNotifier {
       _logger.log('🔄 Fetching external mixes...');
       final recommendations = await _api!.getRecommendations();
       final mixes = _extractExternalMixes(recommendations);
-      final filtered = filterByProvider(mixes);
-      _cacheService.setCachedExternalMixes(filtered);
-      return filtered;
+      _cacheService.setCachedExternalMixes(mixes);
+      return mixes;
     } catch (e) {
       _logger.log('❌ Failed to fetch external mixes: $e');
       return _cacheService.getCachedExternalMixes() ?? [];
     }
   }
 
-  List<MediaItem> _extractExternalMixes(List<RecommendationFolder> folders) {
-    final mixes = <MediaItem>[];
+  List<RecommendationFolder> _extractExternalMixes(List<RecommendationFolder> folders) {
+    final result = <RecommendationFolder>[];
 
     for (final folder in folders) {
-      for (final item in folder.items) {
-        if (item.mediaType != MediaType.playlist && item.mediaType != MediaType.radio) {
-          continue;
-        }
-        if (_isExternalMixItem(item)) {
-          mixes.add(item);
-        }
-      }
+      final providerFiltered = filterByProvider(folder.items);
+      final filteredItems = providerFiltered
+          .where((item) => item.mediaType == MediaType.playlist || item.mediaType == MediaType.radio)
+          .where(_isExternalMixItem)
+          .toList();
+
+      if (filteredItems.isEmpty) continue;
+
+      result.add(RecommendationFolder(
+        itemId: folder.itemId,
+        provider: folder.provider,
+        name: folder.name,
+        uri: folder.uri,
+        items: _deduplicateMixes(filteredItems),
+      ));
     }
 
-    return _deduplicateMixes(mixes);
+    return result;
   }
 
   bool _isExternalMixItem(MediaItem item) {
@@ -3255,7 +3261,7 @@ class MusicAssistantProvider with ChangeNotifier {
   List<Album>? getCachedDiscoverAlbums() => _cacheService.getCachedDiscoverAlbums();
 
   /// Get cached external mixes synchronously (for instant display)
-  List<MediaItem>? getCachedExternalMixes() => _cacheService.getCachedExternalMixes();
+  List<RecommendationFolder>? getCachedExternalMixes() => _cacheService.getCachedExternalMixes();
 
   /// Force a full library sync (for pull-to-refresh)
   Future<void> forceLibrarySync() async {

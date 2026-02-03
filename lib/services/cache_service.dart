@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../models/media_item.dart';
+import '../models/recommendation_folder.dart';
 import '../models/player.dart';
 import '../services/debug_logger.dart';
 import '../services/database_service.dart';
@@ -20,7 +21,7 @@ class CacheService {
   List<Album>? _cachedRecentAlbums;
   List<Artist>? _cachedDiscoverArtists;
   List<Album>? _cachedDiscoverAlbums;
-  List<MediaItem>? _cachedExternalMixes;
+  List<RecommendationFolder>? _cachedExternalMixes;
   List<Audiobook>? _cachedInProgressAudiobooks;
   List<Audiobook>? _cachedDiscoverAudiobooks;
   List<AudiobookSeries>? _cachedDiscoverSeries;
@@ -130,13 +131,13 @@ class CacheService {
   }
 
   /// Get cached external mixes
-  List<MediaItem>? getCachedExternalMixes() => _cachedExternalMixes;
+  List<RecommendationFolder>? getCachedExternalMixes() => _cachedExternalMixes;
 
   /// Set cached external mixes
-  void setCachedExternalMixes(List<MediaItem> mixes) {
+  void setCachedExternalMixes(List<RecommendationFolder> mixes) {
     _cachedExternalMixes = mixes;
     _externalMixesLastFetched = DateTime.now();
-    _logger.log('✅ Cached ${mixes.length} external mixes');
+    _logger.log('✅ Cached ${mixes.length} external mix shelves');
     // Persist to database for instant load on next launch
     _persistHomeRowToDatabase('external_mixes', mixes.map((m) => m.toJson()).toList());
   }
@@ -531,11 +532,11 @@ class CacheService {
       if (mixesData != null) {
         try {
           final items = (jsonDecode(mixesData.itemsJson) as List)
-              .map((json) => parseMediaItemJson(json as Map<String, dynamic>))
+              .map((json) => RecommendationFolder.fromJson(json as Map<String, dynamic>))
               .toList();
           _cachedExternalMixes = items;
           _externalMixesLastFetched = mixesData.lastUpdated;
-          _logger.log('📦 Loaded ${items.length} external mixes from database');
+          _logger.log('📦 Loaded ${items.length} external mix shelves from database');
         } catch (e) {
           _logger.log('⚠️ Failed to parse external mixes: $e');
         }

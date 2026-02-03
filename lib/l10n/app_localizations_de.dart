@@ -152,7 +152,7 @@ class SDe extends S {
   String get discoverAlbums => 'Alben entdecken';
 
   @override
-  String get playlistMixes => 'Playlist-Mixes';
+  String get playlistMixes => 'Playlists entdecken';
 
   @override
   String get continueListening => 'Weiterhoren';

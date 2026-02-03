@@ -153,7 +153,7 @@ class SEs extends S {
   String get discoverAlbums => 'Descubrir álbumes';
 
   @override
-  String get playlistMixes => 'Mezclas de playlists';
+  String get playlistMixes => 'Descubrir listas de reproducción';
 
   @override
   String get continueListening => 'Continuar escuchando';

@@ -362,7 +362,7 @@ abstract class S {
   /// Home screen section title
   ///
   /// In en, this message translates to:
-  /// **'Playlist Mixes'**
+  /// **'Discover Playlists'**
   String get playlistMixes;
 
   /// Home screen section title
