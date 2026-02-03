@@ -156,26 +156,23 @@ class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin 
     const titleHeight = 52.0;
     final contentHeight = baseRowHeight - titleHeight;
 
+    final visibleFolders = _mixes.where((folder) {
+      final name = folder.name.trim().toLowerCase();
+      final id = folder.itemId.trim().toLowerCase();
+      final isRecentlyPlayed = name == 'recently played' || id.contains('recently_played');
+      return !isRecentlyPlayed;
+    }).toList();
+
     final result = RepaintBoundary(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
-            child: Text(
-              widget.title,
-              style: textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onBackground,
-              ),
-            ),
-          ),
           if (_mixes.isEmpty && _isLoading)
             SizedBox(
               height: baseRowHeight - titleHeight,
               child: const Center(child: CircularProgressIndicator()),
             )
-          else if (_mixes.isEmpty)
+          else if (_mixes.isEmpty || visibleFolders.isEmpty)
             SizedBox(
               height: baseRowHeight - titleHeight,
               child: Center(
@@ -186,7 +183,9 @@ class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin 
               ),
             )
           else
-            ..._mixes.map((folder) {
+            ...List<Widget>.generate(visibleFolders.length * 2 - 1, (index) {
+              if (index.isOdd) return const SizedBox(height: 8.0);
+              final folder = visibleFolders[index ~/ 2];
               return SizedBox(
                 height: baseRowHeight,
                 child: Column(
@@ -208,11 +207,7 @@ class _MixesRowState extends State<MixesRow> with AutomaticKeepAliveClientMixin 
                   ],
                 ),
               );
-            }).expand((widget) sync* {
-              yield widget;
-              yield const SizedBox(height: 8.0);
-            }).toList()
-              ..removeLast(),
+            }),
         ],
       ),
     );
