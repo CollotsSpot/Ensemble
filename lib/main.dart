@@ -329,17 +329,8 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
                   theme: AppTheme.lightTheme(colorScheme: lightColorScheme),
                   darkTheme: AppTheme.darkTheme(colorScheme: darkColorScheme),
                   builder: (context, child) {
-                    // Wrap entire app with global player overlay.
-                    // Provide an Overlay ancestor so BottomNavigationBar/Tooltip can render safely.
-                    return Overlay(
-                      initialEntries: [
-                        OverlayEntry(
-                          builder: (context) => GlobalPlayerOverlay(
-                            child: child ?? const SizedBox.shrink(),
-                          ),
-                        ),
-                      ],
-                    );
+                    // Wrap entire app with global player overlay
+                    return GlobalPlayerOverlay(child: child ?? const SizedBox.shrink());
                   },
                   home: const AppStartup(),
                 ),

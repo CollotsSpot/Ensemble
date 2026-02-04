@@ -1506,9 +1506,7 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
                                   itemCount: _tabCount,
                                   // Use default physics - custom physics may cause issues with Flutter 3.38
                                   physics: const PageScrollPhysics(),
-                                  itemBuilder: (context, index) => Builder(
-                                    builder: (context) => _buildTabAtIndex(context, l10n, index),
-                                  ),
+                                  itemBuilder: (context, index) => _buildTabAtIndex(context, l10n, index),
                                 ),
                               ),
                             ),

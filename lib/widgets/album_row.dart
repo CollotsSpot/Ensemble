@@ -114,7 +114,7 @@ class _AlbumRowState extends State<AlbumRow> with AutomaticKeepAliveClientMixin 
 
     // Card layout: square artwork + text below
     // Text area: 8px gap + ~18px title + ~18px artist = ~44px
-    const textAreaHeight = 52.0;
+    const textAreaHeight = 44.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize; // Card width = artwork width (square)
     final itemExtent = cardWidth + 12; // width + horizontal margins
@@ -158,7 +158,7 @@ class _AlbumRowState extends State<AlbumRow> with AutomaticKeepAliveClientMixin 
 
     // Total row height includes title + content
     final totalHeight = widget.rowHeight ?? 237.0; // Default: 44 title + 193 content
-    const titleHeight = 52.0; // 12 top padding + ~24 text + 8 bottom padding
+    const titleHeight = 44.0; // 12 top padding + ~24 text + 8 bottom padding
     final contentHeight = totalHeight - titleHeight;
 
     final result = RepaintBoundary(

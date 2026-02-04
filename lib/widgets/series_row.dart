@@ -179,7 +179,7 @@ class _SeriesRowState extends State<SeriesRow> with AutomaticKeepAliveClientMixi
       );
     }
 
-    const textAreaHeight = 52.0;
+    const textAreaHeight = 44.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize;
     final itemExtent = cardWidth + 12;
@@ -231,7 +231,7 @@ class _SeriesRowState extends State<SeriesRow> with AutomaticKeepAliveClientMixi
     final maProvider = context.read<MusicAssistantProvider>();
 
     final totalHeight = widget.rowHeight ?? 237.0;
-    const titleHeight = 52.0;
+    const titleHeight = 44.0;
     final contentHeight = totalHeight - titleHeight;
 
     final result = RepaintBoundary(
