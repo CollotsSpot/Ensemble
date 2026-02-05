@@ -696,7 +696,8 @@ class SFr extends S {
   String get showRandomAlbums => 'Afficher des albums aléatoires a découvrir';
 
   @override
-  String get showPlaylistMixes => 'Afficher les mixes de playlists provenant de fournisseurs externes';
+  String get showPlaylistMixes =>
+      'Afficher les mixes de playlists provenant de fournisseurs externes';
 
   @override
   String get showAudiobooksInProgress => 'Afficher les livres audio en cours';

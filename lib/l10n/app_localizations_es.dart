@@ -694,7 +694,8 @@ class SEs extends S {
   String get showRandomAlbums => 'Mostrar álbumes aleatorios para descubrir';
 
   @override
-  String get showPlaylistMixes => 'Mostrar mezclas de playlists de proveedores externos';
+  String get showPlaylistMixes =>
+      'Mostrar mezclas de playlists de proveedores externos';
 
   @override
   String get showAudiobooksInProgress => 'Mostrar audiolibros en progreso';

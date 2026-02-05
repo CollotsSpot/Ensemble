@@ -689,7 +689,8 @@ class SDe extends S {
   String get showRandomAlbums => 'Zufällige Alben zum Entdecken anzeigen';
 
   @override
-  String get showPlaylistMixes => 'Playlist-Mixes von externen Anbietern anzeigen';
+  String get showPlaylistMixes =>
+      'Playlist-Mixes von externen Anbietern anzeigen';
 
   @override
   String get showAudiobooksInProgress => 'Hörbücher in Bearbeitung anzeigen';
