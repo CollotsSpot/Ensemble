@@ -3420,13 +3420,12 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
   Widget _buildPodcastsTab(BuildContext context, S l10n) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    // PERF: Use select() to only rebuild when podcasts, loading state, or enabled providers changes
+    // PERF: Use watch() - cannot use select() inside PageView.builder
     // Use podcastsUnfiltered to avoid double-filtering with MA's provider filter
-    final (allPodcasts, isLoading, enabledProviders) = context.select<MusicAssistantProvider, (List<MediaItem>, bool, Set<String>)>(
-      (p) => (p.podcastsUnfiltered, p.isLoadingPodcasts, p.enabledProviderIds.toSet()),
-    );
-    // Use read() for methods that don't need reactive updates
-    final maProvider = context.read<MusicAssistantProvider>();
+    final maProvider = context.watch<MusicAssistantProvider>();
+    final allPodcasts = maProvider.podcastsUnfiltered;
+    final isLoading = maProvider.isLoadingPodcasts;
+    final enabledProviders = maProvider.enabledProviderIds.toSet();
 
     if (isLoading) {
       return Center(child: CircularProgressIndicator(color: colorScheme.primary));
@@ -3724,13 +3723,12 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
   Widget _buildRadioStationsTab(BuildContext context, S l10n) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    // PERF: Use select() to only rebuild when radio stations, loading state, or enabled providers changes
+    // PERF: Use watch() - cannot use select() inside PageView.builder
     // Use radioStationsUnfiltered to avoid double-filtering with MA's provider filter
-    final (allRadioStations, isLoading, enabledProviders) = context.select<MusicAssistantProvider, (List<MediaItem>, bool, Set<String>)>(
-      (p) => (p.radioStationsUnfiltered, p.isLoadingRadio, p.enabledProviderIds.toSet()),
-    );
-    // Use read() for methods that don't need reactive updates
-    final maProvider = context.read<MusicAssistantProvider>();
+    final maProvider = context.watch<MusicAssistantProvider>();
+    final allRadioStations = maProvider.radioStationsUnfiltered;
+    final isLoading = maProvider.isLoadingRadio;
+    final enabledProviders = maProvider.enabledProviderIds.toSet();
 
     if (isLoading) {
       return Center(child: CircularProgressIndicator(color: colorScheme.primary));
@@ -3972,11 +3970,11 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
 
   // ============ ARTISTS TAB ============
   Widget _buildArtistsTab(BuildContext context, S l10n) {
-    // Use select to only rebuild when specific fields change
+    // Use watch instead of select - cannot use select inside PageView.builder
     // SyncService changes are handled by _onSyncServiceChanged listener
-    final (isLoading, enabledProviders) = context.select<MusicAssistantProvider, (bool, Set<String>)>(
-      (p) => (p.isLoading, p.enabledProviderIds.toSet()),
-    );
+    final provider = context.watch<MusicAssistantProvider>();
+    final isLoading = provider.isLoading;
+    final enabledProviders = provider.enabledProviderIds.toSet();
     final colorScheme = Theme.of(context).colorScheme;
     final syncService = SyncService.instance;
 
@@ -4209,11 +4207,11 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
 
   // ============ ALBUMS TAB ============
   Widget _buildAlbumsTab(BuildContext context, S l10n) {
-    // Use select to only rebuild when specific fields change
+    // Use watch instead of select - cannot use select inside PageView.builder
     // SyncService changes are handled by _onSyncServiceChanged listener
-    final (isLoading, enabledProviders) = context.select<MusicAssistantProvider, (bool, Set<String>)>(
-      (p) => (p.isLoading, p.enabledProviderIds.toSet()),
-    );
+    final provider = context.watch<MusicAssistantProvider>();
+    final isLoading = provider.isLoading;
+    final enabledProviders = provider.enabledProviderIds.toSet();
     final colorScheme = Theme.of(context).colorScheme;
     final syncService = SyncService.instance;
 

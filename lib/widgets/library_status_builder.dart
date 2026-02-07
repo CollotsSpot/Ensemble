@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../services/library_status_service.dart';
 
 /// A widget that rebuilds when the library/favorite status of an item changes.
@@ -123,9 +124,16 @@ mixin LibraryStatusMixin<T extends StatefulWidget> on State<T> {
 
   void _onLibraryStatusChanged() {
     // Trigger rebuild to pick up new status values
-    if (mounted) {
-      setState(() {});
-    }
+    // Defer setState to avoid calling it during build phase
+    if (!mounted) return;
+
+    // Use Future.microtask to defer setState until after the current build phase
+    // This prevents "setState during build" errors while avoiding Overlay issues
+    Future.microtask(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   /// Set library status optimistically and return previous value for rollback
