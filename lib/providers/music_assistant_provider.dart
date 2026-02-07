@@ -30,6 +30,7 @@ import '../services/library_status_service.dart';
 import '../services/image_helper_service.dart';
 import '../services/provider_filter_service.dart';
 import '../services/queue_manager_service.dart';
+import '../services/search_service.dart';
 import '../utils/player_sort_utility.dart';
 import '../utils/player_sync_state.dart';
 import '../main.dart' show audioHandler;
@@ -144,6 +145,13 @@ class MusicAssistantProvider with ChangeNotifier {
     getAvailablePlayers: () => _availablePlayers,
     getCastToSendspinMap: () => _castToSendspinIdMap,
     playTracks: playTracks,
+  );
+
+  // Search service (created on demand)
+  SearchService get _searchService => SearchService(
+    api: _api,
+    cacheService: _cacheService,
+    logger: _logger,
   );
 
   // Search state persistence
@@ -3622,44 +3630,11 @@ class MusicAssistantProvider with ChangeNotifier {
   // ============================================================================
 
   Future<Map<String, List<MediaItem>>> searchWithCache(String query, {bool forceRefresh = false, bool libraryOnly = false}) async {
-    final baseKey = query.toLowerCase().trim();
-    if (baseKey.isEmpty) return {'artists': [], 'albums': [], 'tracks': [], 'playlists': [], 'audiobooks': []};
-
-    // Include libraryOnly in cache key to separate results
-    final cacheKey = libraryOnly ? '$baseKey:library' : baseKey;
-
-    if (_cacheService.isSearchCacheValid(cacheKey, forceRefresh: forceRefresh)) {
-      _logger.log('📦 Using cached search results for "$query" (libraryOnly: $libraryOnly)');
-      return _cacheService.getCachedSearchResults(cacheKey)!;
-    }
-
-    if (_api == null) {
-      return _cacheService.getCachedSearchResults(cacheKey) ?? {'artists': [], 'albums': [], 'tracks': [], 'playlists': [], 'audiobooks': []};
-    }
-
-    try {
-      _logger.log('🔄 Searching for "$query" (libraryOnly: $libraryOnly)...');
-      final results = await _api!.search(query, libraryOnly: libraryOnly);
-
-      final cachedResults = <String, List<MediaItem>>{
-        'artists': results['artists'] ?? [],
-        'albums': results['albums'] ?? [],
-        'tracks': results['tracks'] ?? [],
-        'playlists': results['playlists'] ?? [],
-        'audiobooks': results['audiobooks'] ?? [],
-      };
-
-      _cacheService.setCachedSearchResults(cacheKey, cachedResults);
-      _logger.log('✅ Cached search results for "$query"');
-      return cachedResults;
-    } catch (e) {
-      _logger.log('❌ Search failed: $e');
-      return _cacheService.getCachedSearchResults(cacheKey) ?? {'artists': [], 'albums': [], 'tracks': [], 'playlists': [], 'audiobooks': []};
-    }
+    return _searchService.searchWithCache(query, forceRefresh: forceRefresh, libraryOnly: libraryOnly);
   }
 
   void clearAllDetailCaches() {
-    _cacheService.clearAllDetailCaches();
+    _searchService.clearAllDetailCaches();
   }
 
   /// Get cached album tracks (for instant display before background refresh)
