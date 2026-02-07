@@ -33,6 +33,7 @@ import '../services/queue_manager_service.dart';
 import '../services/search_service.dart';
 import '../utils/network_utils.dart';
 import '../utils/player_sort_utility.dart';
+import '../utils/queue_controls.dart';
 import '../utils/player_sync_state.dart';
 import '../main.dart' show audioHandler;
 
@@ -5893,21 +5894,7 @@ class MusicAssistantProvider with ChangeNotifier {
   }
 
   Future<void> cycleRepeatMode(String queueId, String? currentMode) async {
-    String nextMode;
-    switch (currentMode) {
-      case 'off':
-      case null:
-        nextMode = 'all';
-        break;
-      case 'all':
-        nextMode = 'one';
-        break;
-      case 'one':
-        nextMode = 'off';
-        break;
-      default:
-        nextMode = 'off';
-    }
+    final nextMode = QueueControls.getNextRepeatMode(currentMode);
     await setRepeatMode(queueId, nextMode);
   }
 
