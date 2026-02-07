@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import '../services/library_status_service.dart';
 
 /// A widget that rebuilds when the library/favorite status of an item changes.
@@ -110,6 +110,8 @@ mixin LibraryStatusMixin<T extends StatefulWidget> on State<T> {
   /// Whether the item is currently a favorite
   bool get isFavorite => LibraryStatusService.instance.isFavorite(libraryItemKey);
 
+  Timer? _debounceTimer;
+
   @override
   void initState() {
     super.initState();
@@ -119,17 +121,15 @@ mixin LibraryStatusMixin<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     LibraryStatusService.instance.removeListener(_onLibraryStatusChanged);
+    _debounceTimer?.cancel();
     super.dispose();
   }
 
   void _onLibraryStatusChanged() {
-    // Trigger rebuild to pick up new status values
-    // Defer setState to avoid calling it during build phase
-    if (!mounted) return;
-
-    // Use Future.microtask to defer setState until after the current build phase
-    // This prevents "setState during build" errors while avoiding Overlay issues
-    Future.microtask(() {
+    // Debounce rapid status changes to avoid setState during build
+    // Use a short delay to ensure we're outside the build phase
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 50), () {
       if (mounted) {
         setState(() {});
       }
