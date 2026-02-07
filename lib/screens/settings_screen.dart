@@ -56,18 +56,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Map<String, bool> _discoveryRowEnabled = {};
   bool _isLoadingDiscoveryFolders = false;
 
-  /// Filtered row order for the draggable list (excludes discovery-mixes)
-  /// Shows rows in home order, plus any discovery rows from provider that aren't in home order yet
+  /// All available static home screen rows (that can be toggled on/off)
+  static const List<String> _allAvailableRows = [
+    'recent-albums',
+    'discover-artists',
+    'discover-albums',
+    'discovery-mixes',
+    'continue-listening',
+    'discover-audiobooks',
+    'discover-series',
+    'favorite-albums',
+    'favorite-artists',
+    'favorite-tracks',
+    'favorite-playlists',
+    'favorite-radio-stations',
+    'favorite-podcasts',
+  ];
+
+  /// Filtered row order for the draggable list
+  /// Shows all available rows (in home order + discovery rows), regardless of enabled state
   List<String> get _filteredRowOrder {
     final rows = <String>[];
 
-    // First, add all rows from home order (excluding discovery-mixes)
+    // First, add all static rows in their current home order
     for (final rowId in _homeRowOrder) {
       if (rowId == 'discovery-mixes') continue;
       rows.add(rowId);
     }
 
-    // Then, add any discovery rows from provider that aren't in home order yet
+    // Then, add any static rows that aren't in home order yet (so users can enable them)
+    for (final rowId in _allAvailableRows) {
+      if (!_homeRowOrder.contains(rowId) && rowId != 'discovery-mixes') {
+        rows.add(rowId);
+      }
+    }
+
+    // Finally, add any discovery rows from provider that aren't in home order yet
     for (final folder in _discoveryFolders) {
       final discoveryRowId = 'discovery:${folder.itemId}';
       if (!_homeRowOrder.contains(discoveryRowId)) {
