@@ -417,6 +417,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     _controller.removeListener(_recordAnimationFrame);
     _lyricsScrollController.removeListener(_onLyricsScroll);
 
+    _expansionNotifyTimer?.cancel();
     _controller.dispose();
     _queuePanelController.dispose();
     _sleepTimerPanelController.dispose();
@@ -615,6 +616,8 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
 
   // PERF Phase 4: Track last notified value to avoid unnecessary object creation
   double _lastNotifiedProgress = -1;
+  Timer? _expansionNotifyTimer;
+  double? _pendingProgress;
 
   void _notifyExpansionProgress() {
     final progress = _controller.value;
@@ -623,11 +626,23 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     if ((progress - _lastNotifiedProgress).abs() >= 0.01 ||
         progress == 0.0 || progress == 1.0) {
       _lastNotifiedProgress = progress;
-      playerExpansionNotifier.value = PlayerExpansionState(
-        progress,
-        _currentExpandedBgColor,
-        _currentExpandedPrimaryColor,
-      );
+      _pendingProgress = progress;
+
+      // Cancel any pending timer to avoid queue buildup
+      _expansionNotifyTimer?.cancel();
+
+      // Debounce with a short delay to ensure we're outside build phase
+      _expansionNotifyTimer = Timer(const Duration(milliseconds: 1), () {
+        if (mounted && _pendingProgress != null) {
+          playerExpansionNotifier.value = PlayerExpansionState(
+            _pendingProgress!,
+            _currentExpandedBgColor,
+            _currentExpandedPrimaryColor,
+          );
+        }
+        _expansionNotifyTimer = null;
+        _pendingProgress = null;
+      });
     }
   }
 

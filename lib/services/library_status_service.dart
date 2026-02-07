@@ -106,6 +106,7 @@ class LibraryStatusService extends ChangeNotifier {
     required bool Function(dynamic item) getFavorite,
     required String Function(dynamic item) getProvider,
     required String Function(dynamic item) getItemId,
+    bool notify = true,
   }) {
     bool changed = false;
 
@@ -130,7 +131,7 @@ class LibraryStatusService extends ChangeNotifier {
       }
     }
 
-    if (changed) {
+    if (changed && notify) {
       notifyListeners();
     }
   }

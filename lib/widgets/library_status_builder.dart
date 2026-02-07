@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/library_status_service.dart';
 
@@ -110,7 +109,7 @@ mixin LibraryStatusMixin<T extends StatefulWidget> on State<T> {
   /// Whether the item is currently a favorite
   bool get isFavorite => LibraryStatusService.instance.isFavorite(libraryItemKey);
 
-  Timer? _debounceTimer;
+  bool _isStatusUpdatePending = false;
 
   @override
   void initState() {
@@ -121,18 +120,20 @@ mixin LibraryStatusMixin<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     LibraryStatusService.instance.removeListener(_onLibraryStatusChanged);
-    _debounceTimer?.cancel();
     super.dispose();
   }
 
   void _onLibraryStatusChanged() {
-    // Debounce rapid status changes to avoid setState during build
-    // Use a short delay to ensure we're outside the build phase
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 50), () {
+    // Use addPostFrameCallback to ensure setState is called AFTER the build phase
+    // This prevents "setState during build" errors
+    if (_isStatusUpdatePending) return;
+
+    _isStatusUpdatePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() {});
       }
+      _isStatusUpdatePending = false;
     });
   }
 
