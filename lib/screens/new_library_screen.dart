@@ -1210,14 +1210,21 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
         // Mark as loading to avoid duplicate requests
         _authorImages[displayName] = null;
         // Fetch in background using primary author name
-        MetadataService.getAuthorImageUrl(lookupName).then((imageUrl) {
-          if (mounted && imageUrl != null) {
-            setState(() {
-              _authorImages[displayName] = imageUrl;
-            });
-          }
+        _fetchAuthorImage(displayName, lookupName);
+      }
+    }
+  }
+
+  Future<void> _fetchAuthorImage(String displayName, String lookupName) async {
+    try {
+      final imageUrl = await MetadataService.getAuthorImageUrl(lookupName);
+      if (mounted && imageUrl != null) {
+        setState(() {
+          _authorImages[displayName] = imageUrl;
         });
       }
+    } catch (e) {
+      // Ignore image fetch errors - authors will show without images
     }
   }
 

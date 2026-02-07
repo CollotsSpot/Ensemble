@@ -18,6 +18,7 @@ class SleepTimerProvider with ChangeNotifier {
   DateTime? _sleepTimerEndTime;
   int? _sleepTimerMinutes; // null = off, -1 = end of track, positive = minutes
   Timer? _sleepTimerDisplayTimer;
+  bool _disposed = false;
 
   /// Callback to pause playback when timer expires
   OnSleepTimerExpired? onExpired;
@@ -74,7 +75,9 @@ class SleepTimerProvider with ChangeNotifier {
 
     // Start display update timer (every second for countdown)
     _sleepTimerDisplayTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      notifyListeners(); // Update UI with remaining time
+      if (!_disposed) {
+        notifyListeners(); // Update UI with remaining time
+      }
     });
 
     notifyListeners();
@@ -123,6 +126,7 @@ class SleepTimerProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _cancelInternal();
     super.dispose();
   }

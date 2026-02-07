@@ -590,12 +590,13 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> with Sing
             ListTile(
               leading: Icon(Icons.playlist_add, color: colorScheme.onSurface),
               title: Text(S.of(context)!.addToQueue, style: TextStyle(color: colorScheme.onSurface)),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
                 // Add to queue on selected player
                 final player = maProvider.selectedPlayer;
                 if (player != null) {
-                  maProvider.addTracksToQueue(player.playerId, _tracks).then((_) {
+                  try {
+                    await maProvider.addTracksToQueue(player.playerId, _tracks);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -604,7 +605,11 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> with Sing
                         ),
                       );
                     }
-                  });
+                  } catch (e) {
+                    if (mounted) {
+                      _showError(S.of(context)!.failedToAddToQueue(e.toString()));
+                    }
+                  }
                 } else {
                   _showError(S.of(context)!.noPlayerSelected);
                 }

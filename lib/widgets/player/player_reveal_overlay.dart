@@ -80,9 +80,7 @@ class PlayerRevealOverlayState extends State<PlayerRevealOverlay>
     super.initState();
 
     // Load hint settings
-    SettingsService.getShowHints().then((value) {
-      if (mounted) setState(() => _showHints = value);
-    });
+    _loadHintSettings();
 
     _revealController = AnimationController(
       vsync: this,
@@ -108,13 +106,19 @@ class PlayerRevealOverlayState extends State<PlayerRevealOverlay>
     _revealController.forward();
 
     // Auto-refresh player data
-    _refreshTimer = Timer.periodic(Timings.playerPollingInterval, (_) {
+    _refreshTimer = Timer.periodic(Timings.playerPollingInterval, (_) async {
       if (mounted) {
         final provider = context.read<MusicAssistantProvider>();
         provider.refreshPlayers();
-        provider.preloadAllPlayerTracks().then((_) => _preloadColorsForPlayers());
+        await provider.preloadAllPlayerTracks();
+        _preloadColorsForPlayers();
       }
     });
+  }
+
+  Future<void> _loadHintSettings() async {
+    final value = await SettingsService.getShowHints();
+    if (mounted) setState(() => _showHints = value);
   }
 
   /// Extract accent colors from album art for each player
@@ -164,7 +168,7 @@ class PlayerRevealOverlayState extends State<PlayerRevealOverlay>
   }
 
   /// Animate dismissal and call callback when done
-  void dismiss() {
+  Future<void> dismiss() async {
     // Trigger single bounce on mini player when cards are ~70% collapsed
     // This creates the effect of cards "landing" on the mini player
     bool bounceFired = false;
@@ -188,10 +192,9 @@ class PlayerRevealOverlayState extends State<PlayerRevealOverlay>
 
     _revealController.duration = const Duration(milliseconds: 150);
     _revealController.addListener(checkBounce);
-    _revealController.reverse().then((_) {
-      _revealController.removeListener(checkBounce);
-      widget.onDismiss();
-    });
+    await _revealController.reverse();
+    _revealController.removeListener(checkBounce);
+    widget.onDismiss();
   }
 
   /// Check if scroll is at top (or not scrollable)

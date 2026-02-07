@@ -1641,7 +1641,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     _slideController.addListener(animateToTarget);
     _slideController.duration = const Duration(milliseconds: 150);
 
-    _slideController.forward().then((_) {
+    _slideController.forward().then((_) async {
       if (!mounted) return;
 
       _slideController.removeListener(animateToTarget);

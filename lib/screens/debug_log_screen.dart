@@ -364,7 +364,6 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
         padding: EdgeInsets.only(bottom: BottomSpacing.navBarOnly),
         child: FloatingActionButton(
           onPressed: () {
-            setState(() {});
             if (_scrollController.hasClients) {
               _scrollController.animateTo(
                 _scrollController.position.maxScrollExtent,

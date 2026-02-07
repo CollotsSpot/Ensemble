@@ -207,11 +207,10 @@ class _QueuePanelState extends State<QueuePanel> with SingleTickerProviderStateM
     _dropdownController.forward();
   }
 
-  void _closeTransferDropdown() {
+  void _closeTransferDropdown() async {
     if (!_showingTransferDropdown) return;
-    _dropdownController.reverse().then((_) {
-      if (mounted) setState(() => _showingTransferDropdown = false);
-    });
+    await _dropdownController.reverse();
+    if (mounted) setState(() => _showingTransferDropdown = false);
   }
 
   void _handleTransferQueue(BuildContext context) {

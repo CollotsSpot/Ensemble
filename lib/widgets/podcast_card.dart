@@ -261,11 +261,11 @@ class _PodcastCardState extends State<PodcastCard> with LibraryStatusMixin {
                 initialImageUrl: imageUrl,
               ),
             ),
-          ).then((_) {
-            // Reset after navigation debounce delay
-            Future.delayed(Timings.navigationDebounce, () {
-              if (mounted) _isNavigating = false;
-            });
+          );
+
+          // Reset after navigation debounce delay
+          Future.delayed(Timings.navigationDebounce, () {
+            if (mounted) _isNavigating = false;
           });
         },
         onLongPressStart: (details) {
