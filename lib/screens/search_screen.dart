@@ -598,35 +598,47 @@ class SearchScreenState extends State<SearchScreen> {
                     ),
                     const SizedBox(width: 8),
                     // Library-only toggle with circle background
-                    Tooltip(
-                      message: S.of(context)!.libraryOnly,
-                      child: SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: Material(
-                          color: colorScheme.surfaceContainerHighest.withOpacity(0.6),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _libraryOnly = !_libraryOnly;
-                              });
-                              if (_searchController.text.isNotEmpty) {
-                                _performSearch(_searchController.text);
-                              }
-                            },
-                            customBorder: const CircleBorder(),
-                            child: Icon(
-                              Symbols.book_2,
-                              fill: _libraryOnly ? 1 : 0,
-                              size: 22,
-                              color: _libraryOnly
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurface,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final control = SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Material(
+                            color: colorScheme.surfaceContainerHighest.withOpacity(0.6),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _libraryOnly = !_libraryOnly;
+                                });
+                                if (_searchController.text.isNotEmpty) {
+                                  _performSearch(_searchController.text);
+                                }
+                              },
+                              customBorder: const CircleBorder(),
+                              child: Icon(
+                                Symbols.book_2,
+                                fill: _libraryOnly ? 1 : 0,
+                                size: 22,
+                                color: _libraryOnly
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurface,
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+
+                        // Only use Tooltip if an Overlay ancestor exists
+                        final hasOverlay = Overlay.maybeOf(context) != null;
+                        if (!hasOverlay) {
+                          return control;
+                        }
+
+                        return Tooltip(
+                          message: S.of(context)!.libraryOnly,
+                          child: control,
+                        );
+                      },
                     ),
                   ],
                 ),

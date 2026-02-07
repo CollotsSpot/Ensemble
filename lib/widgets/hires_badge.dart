@@ -69,46 +69,54 @@ class HiResBadge extends StatelessWidget {
     final baseColor = primaryColor ?? colorScheme.primary;
     final color = Color.lerp(baseColor, Colors.white, 0.5)!;
 
-    return Tooltip(
-      message: tooltip ?? 'Hi-Res Audio',
-      child: Container(
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          border: Border.all(color: color, width: 1.5),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Hi-Res',
+    final content = Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        border: Border.all(color: color, width: 1.5),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Hi-Res',
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w500,
+              height: 1.1,
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: Text(
+              'AUDIO',
               style: TextStyle(
-                color: color,
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
+                color: colorScheme.surface,
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
                 height: 1.1,
               ),
             ),
-            Container(
-              margin: const EdgeInsets.only(top: 1),
-              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
-              ),
-              child: Text(
-                'AUDIO',
-                style: TextStyle(
-                  color: colorScheme.surface,
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                  height: 1.1,
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+
+    // Only use Tooltip if an Overlay ancestor exists
+    final hasOverlay = Overlay.maybeOf(context) != null;
+    if (!hasOverlay) {
+      return content;
+    }
+
+    return Tooltip(
+      message: tooltip ?? 'Hi-Res Audio',
+      child: content,
     );
   }
 }
