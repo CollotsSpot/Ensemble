@@ -29,6 +29,7 @@ import '../services/database_service.dart';
 import '../services/library_status_service.dart';
 import '../services/image_helper_service.dart';
 import '../services/provider_filter_service.dart';
+import '../services/queue_manager_service.dart';
 import '../utils/player_sync_state.dart';
 import '../main.dart' show audioHandler;
 
@@ -132,6 +133,16 @@ class MusicAssistantProvider with ChangeNotifier {
   PlayerSyncState get _playerSyncState => PlayerSyncState(
     availablePlayers: _availablePlayers,
     castToSendspinIdMap: _castToSendspinIdMap,
+  );
+
+  // Queue manager service (created on demand)
+  QueueManagerService get _queueManager => QueueManagerService(
+    api: _api,
+    database: DatabaseService.instance,
+    logger: _logger,
+    getAvailablePlayers: () => _availablePlayers,
+    getCastToSendspinMap: () => _castToSendspinIdMap,
+    playTracks: playTracks,
   );
 
   // Search state persistence
@@ -5218,104 +5229,17 @@ class MusicAssistantProvider with ChangeNotifier {
   }
 
   Future<PlayerQueue?> getQueue(String playerId) async {
-    // If this player is a group child, fetch the leader's queue instead
-    // This ensures grouped players show the same queue as their leader
-    String effectivePlayerId = playerId;
-    final player = _availablePlayers.firstWhere(
-      (p) => p.playerId == playerId,
-      orElse: () => Player(
-        playerId: playerId,
-        name: '',
-        available: false,
-        powered: false,
-        state: 'idle',
-      ),
-    );
-
-    if (player.isGroupChild && player.syncedTo != null) {
-      _logger.log('🔗 Player $playerId is grouped, fetching leader queue: ${player.syncedTo}');
-      effectivePlayerId = player.syncedTo!;
-    }
-
-    // Translate Sendspin ID to Cast UUID for queue fetch
-    // MA stores queues under the Cast UUID, not the Sendspin ID
-    if (effectivePlayerId.startsWith('cast-') && effectivePlayerId.length >= 13) {
-      // Sendspin ID format: cast-7df484e3 -> need Cast UUID starting with 7df484e3
-      final prefix = effectivePlayerId.substring(5); // Remove "cast-"
-      // Reverse lookup in the map
-      for (final entry in _castToSendspinIdMap.entries) {
-        if (entry.value == effectivePlayerId) {
-          _logger.log('🔗 Translated Sendspin ID $effectivePlayerId to Cast UUID ${entry.key} for queue fetch');
-          effectivePlayerId = entry.key;
-          break;
-        }
-      }
-      // If not in map, try to find in available players
-      if (effectivePlayerId.startsWith('cast-')) {
-        for (final p in _availablePlayers) {
-          if (p.provider == 'chromecast' && p.playerId.startsWith(prefix)) {
-            _logger.log('🔗 Found Cast UUID ${p.playerId} for Sendspin ID $effectivePlayerId via player lookup');
-            effectivePlayerId = p.playerId;
-            break;
-          }
-        }
-      }
-    }
-
-    final queue = await _api?.getQueue(effectivePlayerId);
-
-    // Persist queue to database for instant display on app resume
-    if (queue != null) {
-      _persistQueueToDatabase(playerId, queue);
-    }
-
-    return queue;
+    return _queueManager.getQueue(playerId);
   }
 
   /// Get cached queue for instant display (before API refresh)
   Future<PlayerQueue?> getCachedQueue(String playerId) async {
-    try {
-      if (!DatabaseService.instance.isInitialized) return null;
-
-      final cachedItems = await DatabaseService.instance.getCachedQueue(playerId);
-      if (cachedItems.isEmpty) return null;
-
-      final items = <QueueItem>[];
-      for (final cached in cachedItems) {
-        try {
-          final itemData = jsonDecode(cached.itemJson) as Map<String, dynamic>;
-          items.add(QueueItem.fromJson(itemData));
-        } catch (e) {
-          _logger.log('⚠️ Error parsing cached queue item: $e');
-        }
-      }
-
-      if (items.isEmpty) return null;
-
-      return PlayerQueue(
-        playerId: playerId,
-        items: items,
-        currentIndex: 0, // Will be updated from fresh data
-      );
-    } catch (e) {
-      _logger.log('⚠️ Error loading cached queue: $e');
-      return null;
-    }
+    return _queueManager.getCachedQueue(playerId);
   }
 
   /// Persist queue to database for app restart persistence
   void _persistQueueToDatabase(String playerId, PlayerQueue queue) {
-    () async {
-      try {
-        if (!DatabaseService.instance.isInitialized) return;
-
-        final itemJsonList = queue.items.map((item) => jsonEncode(item.toJson())).toList();
-        await DatabaseService.instance.saveQueue(playerId, itemJsonList);
-        _logger.log('💾 Persisted ${queue.items.length} queue items to database');
-      } catch (e) {
-        _logger.log('⚠️ Error persisting queue to database: $e');
-      }
-    }();
+    _queueManager.persistQueueToDatabase(playerId, queue);
   }
 
   Future<void> playTrack(String playerId, Track track, {bool clearQueue = true}) async {
@@ -5465,42 +5389,7 @@ class MusicAssistantProvider with ChangeNotifier {
 
   /// Attempt to restore the queue from cached data and start playback
   Future<bool> _restoreQueueFromCache(String playerId) async {
-    try {
-      final cachedQueue = await getCachedQueue(playerId);
-      if (cachedQueue == null || cachedQueue.items.isEmpty) {
-        _logger.log('⚠️ No cached queue to restore');
-        return false;
-      }
-
-      // Extract tracks from queue items
-      // playTracks needs either: providerMappings with available entries, OR provider+itemId
-      final tracks = cachedQueue.items
-          .map((item) => item.track)
-          .where((track) {
-            // Check for providerMappings with at least one available entry
-            if (track.providerMappings != null && track.providerMappings!.isNotEmpty) {
-              return track.providerMappings!.any((m) => m.available);
-            }
-            // Fallback: provider + itemId can be used to construct URI
-            return track.provider.isNotEmpty && track.itemId.isNotEmpty;
-          })
-          .toList();
-
-      if (tracks.isEmpty) {
-        _logger.log('⚠️ Cached queue has no valid tracks');
-        return false;
-      }
-
-      _logger.log('🔄 Restoring ${tracks.length} tracks from cached queue');
-
-      // Re-queue all tracks and start playback
-      await playTracks(playerId, tracks, startIndex: 0);
-
-      return true;
-    } catch (e) {
-      _logger.log('❌ Error restoring queue from cache: $e');
-      return false;
-    }
+    return _queueManager.restoreQueueFromCache(playerId);
   }
 
   Future<void> nextTrack(String playerId) async {
