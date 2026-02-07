@@ -54,3 +54,62 @@ class LibraryConstants {
   /// Default limit for recent/random items
   static const int defaultRecentLimit = 10;
 }
+
+/// Image/artwork size constants
+class ImageSizes {
+  ImageSizes._();
+
+  /// Default image size for artwork (256x256)
+  static const int defaultSize = 256;
+
+  /// High resolution image size for player/overlay (512x512)
+  static const int highRes = 512;
+
+  /// Maximum image size for large displays
+  static const int max = 1024;
+}
+
+/// Volume control constants
+class VolumeConstants {
+  VolumeConstants._();
+
+  /// Minimum volume level
+  static const int min = 0;
+
+  /// Maximum volume level
+  static const int max = 100;
+
+  /// Volume range for validation (0-100)
+  static const int range = 100;
+}
+
+/// Player state constants
+class PlayerStates {
+  PlayerStates._();
+
+  /// Player is playing media
+  static const String playing = 'playing';
+
+  /// Player is paused
+  static const String paused = 'paused';
+
+  /// Player is idle/nothing loaded
+  static const String idle = 'idle';
+
+  /// Player is off/disconnected
+  static const String off = 'off';
+}
+
+/// Repeat mode constants
+class RepeatModes {
+  RepeatModes._();
+
+  /// Repeat is off
+  static const String off = 'off';
+
+  /// Repeat all tracks
+  static const String all = 'all';
+
+  /// Repeat single track
+  static const String one = 'one';
+}

@@ -92,7 +92,7 @@ class MusicAssistantProvider with ChangeNotifier {
 
   // Local player state
   bool _isLocalPlayerPowered = true;
-  int _localPlayerVolume = 100; // Tracked MA volume for builtin player (0-100)
+  int _localPlayerVolume = VolumeConstants.max; // Tracked MA volume for builtin player (0-100)
   bool _builtinPlayerAvailable = true; // False on MA 2.7.0b20+ (uses Sendspin instead)
 
   // Home refresh counter - increments to signal home screen to refresh all rows
@@ -2359,7 +2359,7 @@ class MusicAssistantProvider with ChangeNotifier {
   void _handleSendspinVolume(int volumeLevel) async {
     _logger.log('🔊 Sendspin: Set volume to $volumeLevel');
     _localPlayerVolume = volumeLevel;
-    await FlutterVolumeController.setVolume(volumeLevel / 100.0);
+    await FlutterVolumeController.setVolume(volumeLevel / VolumeConstants.range.toDouble());
     _sendspinService?.reportState(volume: volumeLevel);
   }
 
@@ -2617,7 +2617,7 @@ class MusicAssistantProvider with ChangeNotifier {
           final volume = event['volume_level'] as int? ?? event['volume'] as int?;
           if (volume != null) {
             _localPlayerVolume = volume;
-            await FlutterVolumeController.setVolume(volume / 100.0);
+            await FlutterVolumeController.setVolume(volume / VolumeConstants.range.toDouble());
           }
           break;
 
@@ -4037,7 +4037,7 @@ class MusicAssistantProvider with ChangeNotifier {
       // Update notification for builtin player using local mode method (keeps pause working)
       if (_currentTrack != null && (player.state == 'playing' || player.state == 'paused')) {
         final track = _currentTrack!;
-        final artworkUrl = _api?.getImageUrl(track, size: 512);
+        final artworkUrl = _api?.getImageUrl(track, size: ImageSizes.highRes);
         final artistWithPlayer = track.artistsString.isNotEmpty
             ? '${track.artistsString} • ${player.name}'
             : player.name;
@@ -4076,7 +4076,7 @@ class MusicAssistantProvider with ChangeNotifier {
       // and the player is playing (don't wait for polling to kick in)
       if (_currentTrack != null && (player.state == 'playing' || player.state == 'paused')) {
         final track = _currentTrack!;
-        final artworkUrl = _api?.getImageUrl(track, size: 512);
+        final artworkUrl = _api?.getImageUrl(track, size: ImageSizes.highRes);
         // Include player name in artist line: "Artist • Player Name"
         final artistWithPlayer = track.artistsString.isNotEmpty
             ? '${track.artistsString} • ${player.name}'
@@ -4259,7 +4259,7 @@ class MusicAssistantProvider with ChangeNotifier {
       return;
     }
 
-    final artworkUrl = _api?.getImageUrl(track, size: 512);
+    final artworkUrl = _api?.getImageUrl(track, size: ImageSizes.highRes);
     final artistWithPlayer = track.artistsString.isNotEmpty
         ? '${track.artistsString} • ${_selectedPlayer!.name}'
         : _selectedPlayer!.name;
@@ -4365,7 +4365,7 @@ class MusicAssistantProvider with ChangeNotifier {
           }
 
           // Also precache the image so it's ready for swipe preview
-          final imageUrl = getImageUrl(track, size: 512);
+          final imageUrl = getImageUrl(track, size: ImageSizes.highRes);
           if (imageUrl != null) {
             _precacheImage(imageUrl);
           }
@@ -4714,7 +4714,7 @@ class MusicAssistantProvider with ChangeNotifier {
 
         // Update notification for ALL players
         final track = _currentTrack!;
-        final artworkUrl = _api?.getImageUrl(track, size: 512);
+        final artworkUrl = _api?.getImageUrl(track, size: ImageSizes.highRes);
         final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
         final isBuiltinPlayer = builtinPlayerId != null && _selectedPlayer!.playerId == builtinPlayerId;
 
@@ -4817,7 +4817,7 @@ class MusicAssistantProvider with ChangeNotifier {
             title: track.name,
             artist: track.artistsString,
             album: track.album?.name,
-            artUri: _api != null ? Uri.tryParse(_api!.getImageUrl(track, size: 512) ?? '') : null,
+            artUri: _api != null ? Uri.tryParse(_api!.getImageUrl(track, size: ImageSizes.highRes) ?? '') : null,
             duration: track.duration,
           );
           audioHandler.updateLocalModeNotification(
@@ -5731,7 +5731,7 @@ class MusicAssistantProvider with ChangeNotifier {
       final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
       if (builtinPlayerId != null && playerId == builtinPlayerId) {
         _localPlayerVolume = volumeLevel;
-        await FlutterVolumeController.setVolume(volumeLevel / 100.0);
+        await FlutterVolumeController.setVolume(volumeLevel / VolumeConstants.range.toDouble());
       }
       await _api?.setVolume(playerId, volumeLevel);
     } catch (e) {

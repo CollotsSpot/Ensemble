@@ -1,3 +1,5 @@
+import '../constants/timings.dart';
+
 /// Utility methods for queue playback controls.
 ///
 /// Extracted from MusicAssistantProvider to isolate queue control logic.
@@ -7,20 +9,22 @@ class QueueControls {
   /// Cycle order: off → all → one → off
   static String getNextRepeatMode(String? currentMode) {
     switch (currentMode) {
-      case 'off':
+      case RepeatModes.off:
       case null:
-        return 'all';
-      case 'all':
-        return 'one';
-      case 'one':
-        return 'off';
+        return RepeatModes.all;
+      case RepeatModes.all:
+        return RepeatModes.one;
+      case RepeatModes.one:
+        return RepeatModes.off;
       default:
-        return 'off';
+        return RepeatModes.off;
     }
   }
 
   /// Check if a repeat mode is valid.
   static bool isValidRepeatMode(String? mode) {
-    return mode == 'off' || mode == 'all' || mode == 'one';
+    return mode == RepeatModes.off ||
+        mode == RepeatModes.all ||
+        mode == RepeatModes.one;
   }
 }
