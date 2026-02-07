@@ -30,6 +30,7 @@ import '../services/library_status_service.dart';
 import '../services/image_helper_service.dart';
 import '../services/provider_filter_service.dart';
 import '../services/queue_manager_service.dart';
+import '../utils/player_sort_utility.dart';
 import '../utils/player_sync_state.dart';
 import '../main.dart' show audioHandler;
 
@@ -3691,32 +3692,11 @@ class MusicAssistantProvider with ChangeNotifier {
   /// Sort players list based on smart sort setting
   /// Can be called synchronously with pre-fetched settings for cached players
   void _sortPlayersSync(List<Player> players, bool smartSort, String? builtinPlayerId) {
-    if (smartSort) {
-      // Smart sort: local player first, then playing, then on, then off
-      players.sort((a, b) {
-        // Local player always first
-        final aIsLocal = builtinPlayerId != null && a.playerId == builtinPlayerId;
-        final bIsLocal = builtinPlayerId != null && b.playerId == builtinPlayerId;
-        if (aIsLocal && !bIsLocal) return -1;
-        if (bIsLocal && !aIsLocal) return 1;
-
-        // Then by status: playing > on > off
-        int statusPriority(Player p) {
-          if (p.state == 'playing') return 0;
-          if (p.powered && p.state != 'off') return 1;
-          return 2;
-        }
-        final aPriority = statusPriority(a);
-        final bPriority = statusPriority(b);
-        if (aPriority != bPriority) return aPriority.compareTo(bPriority);
-
-        // Within same status, sort alphabetically
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
-    } else {
-      // Default alphabetical sort
-      players.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    }
+    PlayerSortUtility.sortPlayers(
+      players,
+      smartSort: smartSort,
+      builtinPlayerId: builtinPlayerId,
+    );
   }
 
   Future<void> _loadAndSelectPlayers({bool forceRefresh = false, bool coldStart = false}) async {
