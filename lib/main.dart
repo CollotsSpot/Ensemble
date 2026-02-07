@@ -31,82 +31,85 @@ late MassivAudioHandler audioHandler;
 // Global debug logger instance
 final _logger = DebugLogger();
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize SharedPreferences cache early for performance
-  await SettingsService.initialize();
-  _logger.log('⚡ SharedPreferences cached');
-
-  // Initialize local database
-  await DatabaseService.instance.initialize();
-  _logger.log('💾 Database initialized');
-
-  // Migrate existing ownerName to profile (one-time for existing users)
-  await ProfileService.instance.migrateFromOwnerName();
-
-  // Migrate credentials to secure storage (one-time for existing users)
-  await SettingsService.migrateToSecureStorage();
-  _logger.log('🔐 Secure storage migration complete');
-
-  // Load library from cache for instant startup
-  await SyncService.instance.loadFromCache();
-  _logger.log('📦 Library cache loaded');
-
-  // Create auth manager for streaming headers
-  final authManager = AuthManager();
-
-  // Initialize audio_service with our custom handler
-  audioHandler = await AudioService.init(
-    builder: () => MassivAudioHandler(authManager: authManager),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'io.github.collotsspot.massiv.audio',
-      androidNotificationChannelName: 'Ensemble Audio',
-      androidNotificationOngoing: false,  // Must be false when androidStopForegroundOnPause is false
-      androidNotificationIcon: 'drawable/ic_notification',
-      androidShowNotificationBadge: false,
-      androidStopForegroundOnPause: false,  // Keep service alive when paused for background playback
-    ),
-  );
-  _logger.log('🎵 AudioService initialized - background playback and media notifications ENABLED');
-
-  // Set preferred orientations
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
-  // Set initial system UI overlay style based on platform brightness
-  // SystemUIWrapper will update this dynamically when theme changes
-  final platformBrightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
-  final isDark = platformBrightness == Brightness.dark;
-  SystemChrome.setSystemUIOverlayStyle(
-    SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-      systemNavigationBarColor: isDark ? const Color(0xFF1a1a1a) : const Color(0xFFF5F5F5),
-      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-    ),
-  );
-
-  // Set up Flutter error boundary to catch and log widget build errors
-  FlutterError.onError = (FlutterErrorDetails details) {
-    _logger.error('Flutter error: ${details.exceptionAsString()}', context: 'FlutterError');
-    _logger.error('Stack trace:\n${details.stack}', context: 'FlutterError');
-    // Still report to Flutter's default handler in debug mode
-    FlutterError.presentError(details);
-  };
-
-  // Catch errors from the platform dispatcher (platform channel errors)
-  PlatformDispatcher.instance.onError = (error, stack) {
-    _logger.error('Platform error: $error', context: 'PlatformDispatcher');
-    _logger.error('Stack trace:\n$stack', context: 'PlatformDispatcher');
-    return true; // Handled
-  };
-
-  // Wrap app in zone to catch async errors
+void main() {
+  // All initialization must run inside the same zone as runApp() to avoid
+  // "Zone mismatch" errors from Flutter's binding system
   runZonedGuarded(
-    () => runApp(const MusicAssistantApp()),
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      // Initialize SharedPreferences cache early for performance
+      await SettingsService.initialize();
+      _logger.log('⚡ SharedPreferences cached');
+
+      // Initialize local database
+      await DatabaseService.instance.initialize();
+      _logger.log('💾 Database initialized');
+
+      // Migrate existing ownerName to profile (one-time for existing users)
+      await ProfileService.instance.migrateFromOwnerName();
+
+      // Migrate credentials to secure storage (one-time for existing users)
+      await SettingsService.migrateToSecureStorage();
+      _logger.log('🔐 Secure storage migration complete');
+
+      // Load library from cache for instant startup
+      await SyncService.instance.loadFromCache();
+      _logger.log('📦 Library cache loaded');
+
+      // Create auth manager for streaming headers
+      final authManager = AuthManager();
+
+      // Initialize audio_service with our custom handler
+      audioHandler = await AudioService.init(
+        builder: () => MassivAudioHandler(authManager: authManager),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'io.github.collotsspot.massiv.audio',
+          androidNotificationChannelName: 'Ensemble Audio',
+          androidNotificationOngoing: false,  // Must be false when androidStopForegroundOnPause is false
+          androidNotificationIcon: 'drawable/ic_notification',
+          androidShowNotificationBadge: false,
+          androidStopForegroundOnPause: false,  // Keep service alive when paused for background playback
+        ),
+      );
+      _logger.log('🎵 AudioService initialized - background playback and media notifications ENABLED');
+
+      // Set preferred orientations
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+
+      // Set initial system UI overlay style based on platform brightness
+      // SystemUIWrapper will update this dynamically when theme changes
+      final platformBrightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      final isDark = platformBrightness == Brightness.dark;
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarColor: isDark ? const Color(0xFF1a1a1a) : const Color(0xFFF5F5F5),
+          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        ),
+      );
+
+      // Set up Flutter error boundary to catch and log widget build errors
+      FlutterError.onError = (FlutterErrorDetails details) {
+        _logger.error('Flutter error: ${details.exceptionAsString()}', context: 'FlutterError');
+        _logger.error('Stack trace:\n${details.stack}', context: 'FlutterError');
+        // Still report to Flutter's default handler in debug mode
+        FlutterError.presentError(details);
+      };
+
+      // Catch errors from the platform dispatcher (platform channel errors)
+      PlatformDispatcher.instance.onError = (error, stack) {
+        _logger.error('Platform error: $error', context: 'PlatformDispatcher');
+        _logger.error('Stack trace:\n$stack', context: 'PlatformDispatcher');
+        return true; // Handled
+      };
+
+      runApp(const MusicAssistantApp());
+    },
     (error, stackTrace) {
       _logger.error('Uncaught async error: $error', context: 'ZoneError');
       _logger.error('Stack trace:\n$stackTrace', context: 'ZoneError');
@@ -128,6 +131,7 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
   final _hardwareVolumeService = HardwareVolumeService();
   StreamSubscription? _volumeUpSub;
   StreamSubscription? _volumeDownSub;
+  StreamSubscription? _absoluteVolumeSub;
   String? _lastSelectedPlayerId;
   String? _builtinPlayerId;
 
@@ -158,6 +162,12 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
       _volumeDownSub = _hardwareVolumeService.onVolumeDown.listen((_) {
         _adjustVolume(-_volumeStep);
       });
+
+      // Listen for absolute volume changes from lockscreen/background
+      // (ContentObserver on system STREAM_MUSIC volume)
+      _absoluteVolumeSub = _hardwareVolumeService.onAbsoluteVolumeChange.listen((volume) {
+        _setAbsoluteVolume(volume);
+      });
     } catch (e, stack) {
       _logger.error('Hardware volume init failed', context: 'VolumeInit', error: e, stackTrace: stack);
     }
@@ -173,18 +183,41 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
   }
 
   /// Enable/disable volume button interception based on selected player.
+  /// Also manages the volume observer for lockscreen volume routing.
   Future<void> _updateVolumeInterception() async {
+    final player = _musicProvider.selectedPlayer;
     final isBuiltinPlayer = _builtinPlayerId != null &&
-        _musicProvider.selectedPlayer?.playerId == _builtinPlayerId;
+        player?.playerId == _builtinPlayerId;
     await _hardwareVolumeService.setIntercepting(!isBuiltinPlayer);
+
+    // Start/stop volume observer for lockscreen volume changes.
+    // When a remote/group player is active, observe system volume changes
+    // so lockscreen hardware buttons route to the MA player.
+    if (!isBuiltinPlayer && player != null) {
+      // Get the effective volume to sync the system volume HUD
+      final effectiveVolume = _musicProvider.groupVolumeManager.isGroupPlayer(player)
+          ? (_musicProvider.groupVolumeManager.getEffectiveVolumeLevel(
+                  player, _musicProvider.availablePlayersUnfiltered) ?? player.volume)
+          : player.volume;
+      await _hardwareVolumeService.startVolumeObserver(initialVolume: effectiveVolume);
+    } else {
+      await _hardwareVolumeService.stopVolumeObserver();
+    }
   }
 
   Future<void> _adjustVolume(int delta) async {
     final player = _musicProvider.selectedPlayer;
     if (player == null) return;
 
-    final newVolume = (player.volume + delta).clamp(0, 100);
-    if (newVolume != player.volume) {
+    // Use effective volume for group players (player.volume returns 0
+    // because MA API returns null for group player volume_level)
+    final currentVolume = _musicProvider.groupVolumeManager.isGroupPlayer(player)
+        ? (_musicProvider.groupVolumeManager.getEffectiveVolumeLevel(
+                player, _musicProvider.availablePlayersUnfiltered) ?? player.volume)
+        : player.volume;
+
+    final newVolume = (currentVolume + delta).clamp(0, 100);
+    if (newVolume != currentVolume) {
       try {
         await _musicProvider.setVolume(player.playerId, newVolume);
       } catch (e) {
@@ -193,11 +226,29 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
     }
   }
 
+  /// Handle absolute volume change from lockscreen/background.
+  /// Called when the ContentObserver detects a system volume change
+  /// while a remote/group player is active.
+  Future<void> _setAbsoluteVolume(int volume) async {
+    final player = _musicProvider.selectedPlayer;
+    if (player == null) return;
+
+    // Don't route to builtin player - that's handled by the system directly
+    if (_builtinPlayerId != null && player.playerId == _builtinPlayerId) return;
+
+    try {
+      await _musicProvider.setVolume(player.playerId, volume.clamp(0, 100));
+    } catch (e) {
+      _logger.error('Lockscreen volume change failed', context: 'VolumeControl', error: e);
+    }
+  }
+
   @override
   void dispose() {
     _musicProvider.removeListener(_onProviderChanged);
     _volumeUpSub?.cancel();
     _volumeDownSub?.cancel();
+    _absoluteVolumeSub?.cancel();
     _hardwareVolumeService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

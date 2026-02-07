@@ -21,6 +21,7 @@ import '../services/sync_service.dart';
 import '../services/local_player_service.dart';
 import '../services/metadata_service.dart';
 import '../services/position_tracker.dart';
+import '../services/group_volume_manager.dart';
 import '../services/sendspin_service.dart';
 import '../services/pcm_audio_player.dart';
 import '../services/offline_action_queue.dart';
@@ -45,6 +46,7 @@ class MusicAssistantProvider with ChangeNotifier {
   final DebugLogger _logger = DebugLogger();
   final CacheService _cacheService = CacheService();
   final PositionTracker _positionTracker = PositionTracker();
+  final GroupVolumeManager _groupVolumeManager = GroupVolumeManager();
 
   MAConnectionState _connectionState = MAConnectionState.disconnected;
   String? _serverUrl;
@@ -66,6 +68,16 @@ class MusicAssistantProvider with ChangeNotifier {
   List<Player> _availablePlayers = [];
   bool _selectPlayerInProgress = false; // Reentrancy guard for selectPlayer()
   Map<String, String> _castToSendspinIdMap = {}; // Maps regular Cast IDs to Sendspin IDs for grouping
+
+  // Pending volume cache: prevents stale API data from overwriting optimistic
+  // volume updates in _updatePlayerState() and refreshPlayers().
+  // Key: playerId, Value: volume level (0-100)
+  final Map<String, int> _pendingVolumes = {};
+  final Map<String, int> _pendingVolumeTimestamps = {}; // millisecondsSinceEpoch
+  static const int _pendingVolumeTimeoutMs = 8000; // 8s for non-group players
+  static const int _pendingVolumeTimeoutGroupMs = 30000; // 30s for group players (API returns null)
+  static const int _pendingVolumeTolerancePoints = 3; // Confirm if within ±3 points
+
   Track? _currentTrack;
   Audiobook? _currentAudiobook; // Currently playing audiobook context (with chapters)
   String? _currentPodcastName; // Currently playing podcast's name (set when playing episode)
@@ -495,6 +507,9 @@ class MusicAssistantProvider with ChangeNotifier {
 
   /// Raw unfiltered players list (for internal use)
   List<Player> get availablePlayersUnfiltered => _availablePlayers;
+
+  /// Group volume manager for resolving group player volumes
+  GroupVolumeManager get groupVolumeManager => _groupVolumeManager;
 
   /// Check if a player should show the "manually synced" indicator (yellow border)
   /// Returns true for BOTH the leader AND children of a manually created sync group
@@ -1043,16 +1058,17 @@ class MusicAssistantProvider with ChangeNotifier {
       _connectionStateSubscription?.cancel();
       _connectionStateSubscription = _api!.connectionState.listen(
         (state) async {
-          _connectionState = state;
-          notifyListeners();
-
           if (state == MAConnectionState.connected) {
             _logger.log('🔗 WebSocket connected to MA server');
 
             if (_api!.authRequired && !_api!.isAuthenticated) {
+              // Don't broadcast 'connected' yet — AppStartup watches isConnected
+              // and would transition to HomeScreen before auth completes, causing
+              // data fetches to fail with "Not authenticated".
               _logger.log('🔐 MA auth required, attempting authentication...');
               final authenticated = await _handleMaAuthentication();
               if (!authenticated) {
+                _connectionState = MAConnectionState.error;
                 _error = 'Authentication required. Please log in again.';
                 notifyListeners();
                 return;
@@ -1062,17 +1078,26 @@ class MusicAssistantProvider with ChangeNotifier {
               return;
             }
 
-            // No auth required, initialize immediately
+            // No auth required — safe to broadcast connected and initialize
+            _connectionState = state;
+            notifyListeners();
             await _initializeAfterConnection();
           } else if (state == MAConnectionState.authenticated) {
+            _connectionState = state;
+            notifyListeners();
             _logger.log('✅ MA authentication successful');
             // Now safe to initialize since we're authenticated
             await _initializeAfterConnection();
           } else if (state == MAConnectionState.disconnected) {
+            _connectionState = state;
+            notifyListeners();
             // DON'T clear players or caches on disconnect!
             // Keep showing cached data for instant UI display on reconnect
             // Player list and state will be refreshed when connection is restored
             _logger.log('📡 Disconnected - keeping cached players and data for instant resume');
+          } else {
+            _connectionState = state;
+            notifyListeners();
           }
         },
         onError: (error) {
@@ -1870,6 +1895,9 @@ class MusicAssistantProvider with ChangeNotifier {
     _tracks = [];
     _currentTrack = null;
     _cacheService.clearAll();
+    _groupVolumeManager.clear();
+    _pendingVolumes.clear();
+    _pendingVolumeTimestamps.clear();
     _logger.log('🗑️ Cleared all data on logout');
     notifyListeners();
   }
@@ -2720,6 +2748,24 @@ class MusicAssistantProvider with ChangeNotifier {
             _castToSendspinIdMap[selectedId] == playerId;
         if (isMatch) {
           _updatePlayerState();
+        }
+      }
+
+      // Update member volume in _availablePlayers for accurate group volume
+      // computation. When MA changes a group member's volume (after setVolume
+      // on the group player), it fires player_updated for each member.
+      // Without this, _availablePlayers member volumes stay stale until the
+      // next _updatePlayerState poll, which could cause the group average
+      // to be wrong during the convergence check.
+      final rawVolume = event['volume_level'];
+      final eventVolume = rawVolume is int
+          ? rawVolume
+          : (rawVolume is double ? rawVolume.round() : null);
+      if (eventVolume != null) {
+        final idx = _availablePlayers.indexWhere((p) => p.playerId == playerId);
+        if (idx != -1 && _availablePlayers[idx].volumeLevel != eventVolume) {
+          _availablePlayers[idx] =
+              _availablePlayers[idx].copyWith(volumeLevel: eventVolume);
         }
       }
 
@@ -4409,6 +4455,40 @@ class MusicAssistantProvider with ChangeNotifier {
     }
   }
 
+  /// Apply volume protection for the selected player.
+  /// Injects effective volume for group players (whose API volume is null)
+  /// and protects optimistic volume updates from stale API data.
+  void _applyVolumeProtection(Player updatedPlayer, List<Player> allPlayers) {
+    if (_groupVolumeManager.isGroupPlayer(updatedPlayer)) {
+      final effectiveVolume = _groupVolumeManager.getEffectiveVolumeLevel(
+          updatedPlayer, allPlayers);
+      if (effectiveVolume != null) {
+        _selectedPlayer = _selectedPlayer!.copyWith(volumeLevel: effectiveVolume);
+      }
+    }
+
+    final pendingVol = _pendingVolumes[updatedPlayer.playerId];
+    final pendingTs = _pendingVolumeTimestamps[updatedPlayer.playerId];
+    if (pendingVol != null && pendingTs != null) {
+      final elapsed = DateTime.now().millisecondsSinceEpoch - pendingTs;
+      final isGroup = _groupVolumeManager.isGroupPlayer(updatedPlayer);
+      final timeoutMs = isGroup ? _pendingVolumeTimeoutGroupMs : _pendingVolumeTimeoutMs;
+      if (elapsed >= timeoutMs) {
+        _pendingVolumes.remove(updatedPlayer.playerId);
+        _pendingVolumeTimestamps.remove(updatedPlayer.playerId);
+      } else {
+        final currentEffective = _selectedPlayer?.volumeLevel;
+        if (currentEffective != null &&
+            (currentEffective - pendingVol).abs() <= _pendingVolumeTolerancePoints) {
+          _pendingVolumes.remove(updatedPlayer.playerId);
+          _pendingVolumeTimestamps.remove(updatedPlayer.playerId);
+        } else {
+          _selectedPlayer = _selectedPlayer!.copyWith(volumeLevel: pendingVol);
+        }
+      }
+    }
+  }
+
   Future<void> _updatePlayerState() async {
     if (_selectedPlayer == null || _api == null) return;
 
@@ -4439,6 +4519,24 @@ class MusicAssistantProvider with ChangeNotifier {
       if (_selectedPlayer?.playerId != operationPlayerId) {
         _logger.log('⚠️ _updatePlayerState: Player changed during operation, aborting');
         return;
+      }
+
+      // Update _availablePlayers with fresh volume/state data from API.
+      // This is critical for group volume computation: member players don't get
+      // individual _updatePlayerState() calls, so their volumes in _availablePlayers
+      // would go stale. Without this, after the pending timeout expires, the
+      // computed group average uses old member volumes and snaps back to 0.
+      for (final freshPlayer in allPlayers) {
+        final idx = _availablePlayers.indexWhere(
+            (p) => p.playerId == freshPlayer.playerId);
+        if (idx != -1) {
+          _availablePlayers[idx] = _availablePlayers[idx].copyWith(
+            volumeLevel: freshPlayer.volumeLevel,
+            state: freshPlayer.state,
+            powered: freshPlayer.powered,
+            available: freshPlayer.available,
+          );
+        }
       }
 
       Player? rawPlayer = allPlayers.firstWhere(
@@ -4475,6 +4573,9 @@ class MusicAssistantProvider with ChangeNotifier {
       );
 
       _selectedPlayer = updatedPlayer;
+
+      _applyVolumeProtection(updatedPlayer, allPlayers);
+
       stateChanged = true;
 
       // Handle external sources (Spotify Connect, TV optical, etc.)
@@ -4823,6 +4924,8 @@ class MusicAssistantProvider with ChangeNotifier {
         }
 
         _selectedPlayer = updatedPlayer;
+
+        _applyVolumeProtection(updatedPlayer, _availablePlayers);
       } catch (e) {
         stateChanged = true;
       }
@@ -5795,6 +5898,63 @@ class MusicAssistantProvider with ChangeNotifier {
 
   Future<void> setVolume(String playerId, int volumeLevel) async {
     try {
+      // Optimistically update the selected player's volume BEFORE any async calls.
+      // This prevents slider snapback: without this, clearing _pendingVolume on drag
+      // end causes the slider to read the stale player.volume until player_updated arrives.
+      if (_selectedPlayer != null && _selectedPlayer!.playerId == playerId) {
+        _selectedPlayer = _selectedPlayer!.copyWith(volumeLevel: volumeLevel);
+        notifyListeners();
+      }
+
+      // Cache pending volume for ALL players to protect optimistic updates
+      // from being overwritten by stale API data in _updatePlayerState()/refreshPlayers().
+      _pendingVolumes[playerId] = volumeLevel;
+      _pendingVolumeTimestamps[playerId] = DateTime.now().millisecondsSinceEpoch;
+
+      // Also cache for group players in GroupVolumeManager
+      // (MA API returns null for group player volume_level)
+      final player = _availablePlayers.where((p) => p.playerId == playerId).firstOrNull;
+      if (player != null && _groupVolumeManager.isGroupPlayer(player)) {
+        _groupVolumeManager.onVolumeSet(playerId, volumeLevel);
+      }
+
+      // Proportional volume propagation for in-app sync group leaders.
+      // When a user creates a group via long-press (players/cmd/group), the leader
+      // retains its own non-null volumeLevel and isGroupPlayer() returns false.
+      // We detect this via isGroupLeader and propagate volume changes to all
+      // members proportionally, preserving relative volume balance.
+      if (player != null &&
+          player.isGroupLeader &&
+          !_groupVolumeManager.isGroupPlayer(player)) {
+        final currentVol = player.volumeLevel;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        for (final memberId in player.groupMembers!) {
+          if (memberId == playerId) continue; // Skip the leader itself
+          final idx = _availablePlayers.indexWhere((p) => p.playerId == memberId);
+          if (idx == -1) continue;
+          final member = _availablePlayers[idx];
+          if (member.volumeLevel == null) continue;
+
+          final int memberNewVol;
+          if (currentVol != null && currentVol > 0) {
+            // Ratio-based: maintain relative balance between members
+            memberNewVol = (member.volumeLevel! * volumeLevel / currentVol)
+                .round()
+                .clamp(0, 100);
+          } else {
+            // Can't ratio from 0 — set all to the new absolute value
+            memberNewVol = volumeLevel;
+          }
+
+          // Protect from snap-back and update optimistically
+          _pendingVolumes[memberId] = memberNewVol;
+          _pendingVolumeTimestamps[memberId] = now;
+          _availablePlayers[idx] = member.copyWith(volumeLevel: memberNewVol);
+          // Fire-and-forget — don't await, send in parallel
+          _api?.setVolume(memberId, memberNewVol);
+        }
+      }
+
       final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
       if (builtinPlayerId != null && playerId == builtinPlayerId) {
         _localPlayerVolume = volumeLevel;

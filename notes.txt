@@ -1,0 +1,260 @@
+# Pull Request: Group Volume Management, Hardware Volume Integration, and Bugfixes
+
+## Summary
+
+This PR represents a testing and debugging cycle following v3.0.2. Initial work on sync group volume management uncovered multiple UI bugs that required fixes. The final result addresses:
+
+1. **Fix: Group Player Volume Management** - Two distinct volume control issues for Music Assistant sync groups
+2. **Feature: Hardware Volume Button Integration** - Phone volume buttons now control Music Assistant player volume from lockscreen / shade widget / app minimised
+3. **UI Bug Fixes** - Five UI issues discovered during sync group testing, which had to be fixed to get the sync groups to work without crashes
+4. **Fix: Cold Start Homepage Race Condition** - Intermittent empty homepage on app cold start - surfaced once sync group volume calculations were introduced.
+5. **Code Quality: Cleanup and Optimization** - Removes dead code and eliminates duplicate logic - mine, not yours, I tried to not to touch your code as much as possible
+
+All changes have been tested and verified with `dart analyze` showing no new issues.
+
+---
+
+## Group Volume Management Fixes
+
+### 1. Group Player Volume Management
+
+**Issue:** Volume control for Music Assistant sync groups had two distinct problems depending on how the group was created:
+
+1. **Server-side groups**: Volume slider would snap back to 0 immediately after release
+2. **In-app created groups**: Adjusting the leader's volume only changed that one player, not all members proportionally
+
+#### Part A: Server-Side Groups (Null Volume Snap-back)
+
+**Root Cause:** The Music Assistant API returns `volume_level: null` for certain group players (pre-configured speaker groups with `provider == 'player_group'` and some server-side sync groups). The app had no logic to handle this case, so the null volume was interpreted as 0.
+
+**Solution:** Implemented `GroupVolumeManager` service with dual-tier volume protection:
+
+- **Tier 1 (GroupVolumeManager):** Computes effective volume from group members (detects groups, resolves nested, averages volumes, caches pending for 30s, confirms with ±3 tolerance).
+- **Tier 2 (Provider-level):** Optimistic update protection (caches for 8s/30s, prevents stale overwrites).
+
+#### Part B: In-App Created Groups (Proportional Volume Propagation)
+
+**Root Cause:** For in-app groups, leader has non-null volume, so `setVolume()` only affects leader, not members.
+
+**Expected behavior:** Leader adjustment changes all members proportionally; individual adjustments affect only that member.
+
+**Solution:** In `setVolume()`, for group leaders with non-null volume:
+1. Calculate proportional: `memberNewVol = (memberCurrentVol * newVol / leaderCurrentVol).round()` (handle zero case with absolute).
+2. Cache pending, update optimistically, fire parallel API calls.
+
+**Files Changed:**
+- `lib/services/group_volume_manager.dart` (NEW - 162 lines)
+- `lib/providers/music_assistant_provider.dart` (added manager, helper, updated events/state/volume methods)
+
+---
+
+## Features
+
+### 2. Hardware Volume Button Integration (Convenience Feature)
+
+**Feature:** Phone hardware volume buttons (including lockscreen) control MA player volume, with system HUD mirroring.
+
+**Implementation:**
+- **Android Native:** `MainActivity.kt` (~120 lines) - VolumeContentObserver, MethodChannel commands, lifecycle.
+- **Flutter Service:** `hardware_volume_service.dart` (~65 lines) - streams, observer methods, sync.
+- **Integration:** `main.dart` (~35 lines) - adjust/set/update methods, subscription.
+
+**Why This Matters:** Seamless remote control from lockscreen/tray/buttons.
+
+---
+
+## UI Bug Fixes
+
+During sync group testing, fixed these UI bugs:
+
+### 3A. Zone Mismatch Warning
+
+**File:** `lib/main.dart`
+
+**Issue:** Console warnings during init.
+
+**Root Cause:** Init code outside `runZonedGuarded()`.
+
+**Fix:** Move init inside `runZonedGuarded()`.
+
+---
+
+### 3B. BottomNavigationBar "No Overlay" Crash
+
+**Files:** `lib/screens/home_screen.dart`, `lib/widgets/global_player_overlay.dart`
+
+**Issue:** Crash on nav interaction.
+
+**Root Cause:** Nav in Stack without Overlay.
+
+**Fix:** Move nav to Scaffold.bottomNavigationBar, add extendBody: true.
+
+---
+
+### 3C. setState During Build Warning (Artist/Album Cards)
+
+**Files:** `lib/widgets/artist_card.dart`, `lib/widgets/album_card.dart`
+
+**Issue:** Warnings causing corruption.
+
+**Root Cause:** Service calls in initState trigger setState during build.
+
+**Fix:** Defer with addPostFrameCallback, add mounted guard.
+
+---
+
+### 3D. context.select Inside SliverList Crash
+
+**File:** `lib/screens/new_library_screen.dart`
+
+**Issue:** Crash on library tabs.
+
+**Root Cause:** context.select in sliver context.
+
+**Fix:** Use Consumer wrappers for tabs.
+
+---
+
+### 3E. QueuePanel Tooltip "No Overlay" Error
+
+**File:** `lib/widgets/player/queue_panel.dart`
+
+**Issue:** Crash on long-press buttons.
+
+**Root Cause:** Tooltips require Overlay, but in Stack.
+
+**Fix:** Remove tooltip properties.
+
+---
+
+### 3F. Settings Back Button Crash
+
+**File:** `lib/screens/settings_screen.dart`
+
+**Issue:** Back button crashes to black screen.
+
+**Root Cause:** Navigator.pop pops home screen.
+
+**Fix:** Use showPlayer + setSelectedIndex(0).
+
+---
+
+## Cold Start Homepage Race Condition Fix
+
+### 4. Cold Start Homepage Empty/No Refresh
+
+**Issue:** Intermittent empty homepage on cold start.
+
+**Root Cause:** isConnected true before auth complete, leading to failed fetches.
+
+**Solution:** Delay broadcasting 'connected' state until auth if required (`music_assistant_provider.dart:1058-1101`).
+
+---
+
+## Technical Implementation Details
+
+### GroupVolumeManager Architecture
+
+The `GroupVolumeManager` is a stateful service that handles **server-side groups with null volume**:
+
+1. **Detects group players:**
+   ```dart
+   bool isGroupPlayer(Player player) {
+     // Pre-configured MA speaker groups
+     if (player.provider == 'player_group') return true;
+     // Dynamic sync groups: have multiple members but MA returns null volume
+     if (player.groupMembers != null &&
+         player.groupMembers!.length > 1 &&
+         player.volumeLevel == null) {
+       return true;
+     }
+     return false;
+   }
+   ```
+
+2. **Computes effective volume:**
+   - Recursively resolves nested groups (max depth 3)
+   - Averages volumes across all leaf members
+   - Skips self-references in `groupMembers`
+   - Returns `null` if no members have valid volumes
+
+3. **Caches pending volumes:**
+   - When user sets volume: stored with timestamp
+   - Returns cached value if within 30s timeout
+   - Clears cache when member average converges (±3 tolerance)
+   - Falls back to computed average after timeout
+
+4. **Integrates with provider:**
+   - Called from `_applyVolumeProtection()` in provider
+   - Receives fresh `allPlayers` list for accurate member volumes
+   - Injects effective volume into `_selectedPlayer` via `copyWith()`
+
+### Proportional Volume Propagation (In-App Groups)
+
+For **in-app created groups with non-null leader volume**, proportional propagation works as follows:
+
+1. **Detection:** `setVolume()` checks if `player.isGroupLeader && !isGroupPlayer(player)`
+   - Leader has `groupMembers` with 2+ entries
+   - Leader has its own non-null `volumeLevel`
+   - NOT detected as a group player (GroupVolumeManager handles those)
+
+2. **Calculation:** For each member in `groupMembers` (excluding leader itself):
+   ```dart
+   if (leaderCurrentVol > 0) {
+     memberNewVol = (memberVol * newVol / leaderCurrentVol).round().clamp(0, 100)
+   } else {
+     memberNewVol = newVol  // Can't ratio from zero
+   }
+   ```
+
+3. **Execution:**
+   - Cache `_pendingVolumes[memberId]` and `_pendingVolumeTimestamps[memberId]`
+   - Update `_availablePlayers[idx]` optimistically
+   - Fire `_api?.setVolume(memberId, memberNewVol)` without awaiting
+   - Continue to send leader's own `volume_set` command
+
+4. **Result:** All member volumes scale proportionally with the leader, preserving relative balance.
+
+### Connection State Flow (After Fix)
+
+```
+WebSocket connects → MAConnectionState.connected
+                    ↓
+         Auth required?
+        ↙              ↘
+      YES              NO
+       ↓                ↓
+  Don't notify    Set state + notify
+  Try auth              ↓
+       ↓          Initialize
+   Success?
+  ↙        ↘
+YES        NO
+ ↓          ↓
+auth     error state
+event     + notify
+ ↓
+Set state
++ notify
+ ↓
+Initialize
+```
+
+**Key:** Listeners only see `isConnected = true` after auth completes (or immediately if no auth required).
+
+
+## Files Modified
+android/.../MainActivity.kt                      |  120 + (NEW - ContentObserver)
+lib/main.dart                                    |  207 ±
+lib/providers/music_assistant_provider.dart      |  165 ±
+lib/screens/home_screen.dart                     |  172 ± (BottomNav moved here)
+lib/screens/new_library_screen.dart              |   70 ± (Consumer wrappers)
+lib/screens/settings_screen.dart                 |    9 ± (back button fix)
+lib/services/group_volume_manager.dart           |  162 + (NEW)
+lib/services/hardware_volume_service.dart        |   65 + (NEW)
+lib/widgets/album_card.dart                      |   23 ± (postFrameCallback)
+lib/widgets/artist_card.dart                     |   23 ± (postFrameCallback)
+lib/widgets/global_player_overlay.dart           |  171 - (BottomNav moved out)
+lib/widgets/player/queue_panel.dart              |    2 - (tooltip removed)
+
+**Total:** ~650 added, ~300 removed/refactored.

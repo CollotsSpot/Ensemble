@@ -3,50 +3,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/music_assistant_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../services/settings_service.dart';
-import '../theme/theme_provider.dart';
 
 import 'expandable_player.dart';
 import 'player/mini_player_content.dart' show MiniPlayerLayout;
 import 'player/player_reveal_overlay.dart';
-
-/// Cached color with contrast adjustment
-/// Avoids expensive HSL conversions during scroll
-class _CachedNavColor {
-  Color? _sourceColor;
-  bool? _isDark;
-  Color? _adjustedColor;
-
-  Color getAdjustedColor(Color sourceColor, bool isDark) {
-    // Return cached value if inputs haven't changed
-    if (_sourceColor == sourceColor && _isDark == isDark && _adjustedColor != null) {
-      return _adjustedColor!;
-    }
-
-    // Compute new adjusted color
-    var navSelectedColor = sourceColor;
-    if (isDark && navSelectedColor.computeLuminance() < 0.2) {
-      final hsl = HSLColor.fromColor(navSelectedColor);
-      navSelectedColor = hsl.withLightness((hsl.lightness + 0.3).clamp(0.0, 0.8)).toColor();
-    } else if (!isDark && navSelectedColor.computeLuminance() > 0.8) {
-      final hsl = HSLColor.fromColor(navSelectedColor);
-      navSelectedColor = hsl.withLightness((hsl.lightness - 0.3).clamp(0.2, 1.0)).toColor();
-    }
-
-    // Cache the result
-    _sourceColor = sourceColor;
-    _isDark = isDark;
-    _adjustedColor = navSelectedColor;
-
-    return navSelectedColor;
-  }
-}
-
-final _cachedNavColor = _CachedNavColor();
 
 /// A global key to access the player state from anywhere in the app
 final globalPlayerKey = GlobalKey<ExpandablePlayerState>();
@@ -530,138 +494,9 @@ class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay>
           padding: const EdgeInsets.only(bottom: 0), // Content manages its own padding
           child: widget.child,
         ),
-        // Global persistent bottom navigation bar - positioned at bottom
-        // Hide when: not connected OR showing welcome screen
-        // Always show when connected so users can access Settings/Library even without a player
-        if (isConnected && !shouldShowWelcomeBackdrop)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: ListenableBuilder(
-              listenable: navigationProvider,
-              builder: (context, _) {
-                return Consumer<ThemeProvider>(
-                builder: (context, themeProvider, _) {
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
+        // BottomNavigationBar is now in HomeScreen's Scaffold.bottomNavigationBar
+        // for proper Navigator/Overlay ancestry
 
-                  return ValueListenableBuilder<PlayerExpansionState>(
-                    valueListenable: playerExpansionNotifier,
-                    builder: (context, expansionState, _) {
-                      // Nav bar color logic - only use adaptive colors when:
-                      // 1. Player is expanding/expanded, OR
-                      // 2. On a detail screen (isOnDetailScreen)
-                      // On home screen with collapsed player: always use default theme colors
-                      final bool useAdaptiveColors = themeProvider.adaptiveTheme &&
-                          (expansionState.progress > 0 || themeProvider.isOnDetailScreen);
-
-                      // Nav bar background color
-                      final Color navBgColor;
-                      if (expansionState.progress > 0 && expansionState.backgroundColor != null) {
-                        // Player is expanding - blend from surface to player's adaptive color
-                        navBgColor = Color.lerp(colorScheme.surface, expansionState.backgroundColor, expansionState.progress)!;
-                      } else if (useAdaptiveColors) {
-                        // On a detail screen - use adaptive surface color for nav bar
-                        final adaptiveBg = themeProvider.getAdaptiveSurfaceColorFor(Theme.of(context).brightness);
-                        navBgColor = adaptiveBg ?? colorScheme.surface;
-                      } else {
-                        // Home screen with collapsed player - use default surface color
-                        navBgColor = colorScheme.surface;
-                      }
-
-                      // Icon color - only use adaptive colors when appropriate
-                      final Color baseSourceColor = (useAdaptiveColors && themeProvider.adaptiveColors != null)
-                          ? themeProvider.adaptiveColors!.primary
-                          : colorScheme.primary;
-
-                      // Blend icon color with player's primary color during expansion
-                      Color sourceColor = baseSourceColor;
-                      if (themeProvider.adaptiveTheme && expansionState.progress > 0 && expansionState.primaryColor != null) {
-                        sourceColor = Color.lerp(baseSourceColor, expansionState.primaryColor!, expansionState.progress)!;
-                      }
-                      final navSelectedColor = _cachedNavColor.getAdjustedColor(sourceColor, isDark);
-
-                      // Fade out and slide down nav bar as player expands
-                      // Use IgnorePointer when faded to prevent accidental taps
-                      final navOpacity = (1.0 - expansionState.progress * 2).clamp(0.0, 1.0);
-                      final navSlideDown = expansionState.progress * 20; // Slide down 20px as it fades
-
-                      return IgnorePointer(
-                        ignoring: navOpacity < 0.1,
-                        child: Transform.translate(
-                          offset: Offset(0, navSlideDown),
-                          child: Opacity(
-                            opacity: navOpacity,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: navBgColor,
-                                boxShadow: expansionState.progress < 0.5
-                                    ? [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.1),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, -2),
-                                        ),
-                                      ]
-                                    : null,
-                              ),
-                              child: BottomNavigationBar(
-                                currentIndex: navigationProvider.selectedIndex,
-                                onTap: (index) {
-                                  if (GlobalPlayerOverlay.isPlayerExpanded) {
-                                    GlobalPlayerOverlay.collapsePlayer();
-                                  }
-                                  navigationProvider.navigatorKey.currentState?.popUntil((route) => route.isFirst);
-                                  // Clear adaptive colors when switching tabs (detail screen colors shouldn't persist)
-                                  themeProvider.clearAdaptiveColors();
-                                  if (index == 3) {
-                                    GlobalPlayerOverlay.hidePlayer();
-                                  } else if (navigationProvider.selectedIndex == 3) {
-                                    GlobalPlayerOverlay.showPlayer();
-                                  }
-                                  navigationProvider.setSelectedIndex(index);
-                                },
-                                backgroundColor: Colors.transparent,
-                                selectedItemColor: navSelectedColor,
-                                unselectedItemColor: colorScheme.onSurface.withOpacity(0.54),
-                                elevation: 0,
-                                type: BottomNavigationBarType.fixed,
-                                selectedFontSize: 12,
-                                unselectedFontSize: 12,
-                                items: [
-                                  BottomNavigationBarItem(
-                                    icon: const Icon(Icons.home_outlined),
-                                    activeIcon: const Icon(Icons.home_rounded),
-                                    label: S.of(context)!.home,
-                                  ),
-                                  BottomNavigationBarItem(
-                                    icon: const Icon(Symbols.book_2, fill: 0),
-                                    activeIcon: const Icon(Symbols.book_2, fill: 1),
-                                    label: S.of(context)!.library,
-                                  ),
-                                  BottomNavigationBarItem(
-                                    icon: const Icon(Icons.search_rounded),
-                                    activeIcon: const Icon(Icons.search_rounded),
-                                    label: S.of(context)!.search,
-                                  ),
-                                  BottomNavigationBarItem(
-                                    icon: const Icon(Icons.settings_outlined),
-                                    activeIcon: const Icon(Icons.settings_rounded),
-                                    label: S.of(context)!.settings,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-              },
-            ),
-          ),
         // Blur backdrop for device selector (reveal mode) - static, no animation
         if (_isRevealVisible && !_isHintModeActive)
           Positioned.fill(

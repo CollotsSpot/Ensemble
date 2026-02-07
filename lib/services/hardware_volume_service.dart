@@ -7,6 +7,11 @@ import 'debug_logger.dart';
 ///
 /// For MA players: intercept buttons and send volume commands via API
 /// For builtin player: let native volume work (don't intercept)
+///
+/// Also provides a volume observer for lockscreen volume changes.
+/// When the app is in the background/lockscreen, dispatchKeyEvent doesn't fire,
+/// so the observer watches system STREAM_MUSIC volume changes and sends
+/// absolute volume values to Flutter for routing to the MA player.
 class HardwareVolumeService {
   static final HardwareVolumeService _instance = HardwareVolumeService._internal();
   factory HardwareVolumeService() => _instance;
@@ -17,15 +22,24 @@ class HardwareVolumeService {
 
   final _volumeUpController = StreamController<void>.broadcast();
   final _volumeDownController = StreamController<void>.broadcast();
+  final _absoluteVolumeController = StreamController<int>.broadcast();
 
   Stream<void> get onVolumeUp => _volumeUpController.stream;
   Stream<void> get onVolumeDown => _volumeDownController.stream;
+
+  /// Stream of absolute volume values (0-100) from lockscreen hardware buttons.
+  /// Fires when the system STREAM_MUSIC volume changes while the volume
+  /// observer is active (remote/group player selected, app in background).
+  Stream<int> get onAbsoluteVolumeChange => _absoluteVolumeController.stream;
 
   bool _isListening = false;
   bool get isListening => _isListening;
 
   bool _isIntercepting = false;
   bool get isIntercepting => _isIntercepting;
+
+  bool _isObservingVolume = false;
+  bool get isObservingVolume => _isObservingVolume;
 
   /// Initialize the service and start listening for volume button events
   Future<void> init() async {
@@ -38,6 +52,11 @@ class HardwareVolumeService {
           break;
         case 'volumeDown':
           _volumeDownController.add(null);
+          break;
+        case 'absoluteVolumeChange':
+          // Volume changed from lockscreen/background via ContentObserver
+          final volume = call.arguments as int? ?? 0;
+          _absoluteVolumeController.add(volume);
           break;
       }
     });
@@ -70,8 +89,53 @@ class HardwareVolumeService {
     }
   }
 
+  /// Start the volume observer for lockscreen/background volume changes.
+  /// When active, system STREAM_MUSIC volume changes are detected and sent
+  /// to Flutter via [onAbsoluteVolumeChange]. Optionally sets the system
+  /// volume to [initialVolume] (0-100) to match the MA player's current volume.
+  Future<void> startVolumeObserver({int? initialVolume}) async {
+    if (_isObservingVolume) return;
+
+    try {
+      await _channel.invokeMethod('startVolumeObserver', {
+        if (initialVolume != null) 'initialVolume': initialVolume,
+      });
+      _isObservingVolume = true;
+      _logger.info('Volume observer started', context: 'VolumeService');
+    } catch (e) {
+      _logger.error('Failed to start volume observer', context: 'VolumeService', error: e);
+    }
+  }
+
+  /// Stop the volume observer.
+  Future<void> stopVolumeObserver() async {
+    if (!_isObservingVolume) return;
+
+    try {
+      await _channel.invokeMethod('stopVolumeObserver');
+      _isObservingVolume = false;
+      _logger.info('Volume observer stopped', context: 'VolumeService');
+    } catch (e) {
+      _logger.error('Failed to stop volume observer', context: 'VolumeService', error: e);
+    }
+  }
+
+  /// Sync the system volume to match the MA player volume (0-100).
+  /// Used to keep the system volume HUD in sync with the MA player.
+  Future<void> syncSystemVolume(int maVolume) async {
+    try {
+      await _channel.invokeMethod('syncSystemVolume', {'volume': maVolume});
+    } catch (e) {
+      _logger.error('Failed to sync system volume', context: 'VolumeService', error: e);
+    }
+  }
+
   /// Stop listening for volume button events
   Future<void> dispose() async {
+    if (_isObservingVolume) {
+      await stopVolumeObserver();
+    }
+
     if (!_isListening) return;
 
     try {
@@ -86,5 +150,6 @@ class HardwareVolumeService {
     // Close StreamControllers to prevent memory leaks
     await _volumeUpController.close();
     await _volumeDownController.close();
+    await _absoluteVolumeController.close();
   }
 }

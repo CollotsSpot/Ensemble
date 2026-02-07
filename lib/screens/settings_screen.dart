@@ -8,6 +8,7 @@ import '../services/settings_service.dart';
 import '../theme/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/page_transitions.dart';
+import '../providers/navigation_provider.dart';
 import '../widgets/global_player_overlay.dart';
 import 'debug_log_screen.dart';
 import 'login_screen.dart';
@@ -274,7 +275,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            // Settings is rendered conditionally in HomeScreen (not pushed as a route),
+            // so Navigator.pop would pop the entire HomeScreen causing a black screen.
+            // Instead, switch tab back to Home and restore the mini player.
+            GlobalPlayerOverlay.showPlayer();
+            navigationProvider.setSelectedIndex(0);
+          },
           color: colorScheme.onBackground,
         ),
         title: Text(

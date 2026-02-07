@@ -59,15 +59,20 @@ class _ArtistCardState extends State<ArtistCard> with LibraryStatusMixin {
   @override
   void initState() {
     super.initState();
-    // Initialize status in centralized service from widget data
-    final service = LibraryStatusService.instance;
-    final key = libraryItemKey;
-    if (!service.isInLibrary(key) && widget.artist.inLibrary) {
-      service.setLibraryStatus(key, true);
-    }
-    if (!service.isFavorite(key) && (widget.artist.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
-    }
+    // Defer status initialization to after the build frame completes.
+    // setLibraryStatus() calls notifyListeners() synchronously, which triggers
+    // setState() in listening widgets — illegal during the build phase.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final service = LibraryStatusService.instance;
+      final key = libraryItemKey;
+      if (!service.isInLibrary(key) && widget.artist.inLibrary) {
+        service.setLibraryStatus(key, true);
+      }
+      if (!service.isFavorite(key) && (widget.artist.favorite ?? false)) {
+        service.setFavoriteStatus(key, true);
+      }
+    });
     // Fetch fallback image once in initState, not during build
     _initFallbackImage();
   }

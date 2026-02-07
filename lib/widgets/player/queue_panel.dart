@@ -806,14 +806,12 @@ class _QueuePanelState extends State<QueuePanel> with SingleTickerProviderStateM
                         ),
                         onPressed: () => _handleTransferQueue(context),
                         padding: Spacing.paddingAll12,
-                        tooltip: S.of(context)!.transferQueueToPlayer,
                       ),
                       // Clear queue button
                       IconButton(
                         icon: Icon(Icons.delete_sweep_rounded, color: widget.textColor.withOpacity(0.7), size: IconSizes.sm),
                         onPressed: _handleClearQueue,
                         padding: Spacing.paddingAll12,
-                        tooltip: S.of(context)!.clearQueue,
                       ),
                     ],
                   ),

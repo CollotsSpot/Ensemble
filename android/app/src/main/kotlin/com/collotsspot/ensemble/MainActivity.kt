@@ -1,5 +1,11 @@
 package com.collotsspot.ensemble
 
+import android.content.Context
+import android.database.ContentObserver
+import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -14,9 +20,21 @@ class MainActivity: AudioServiceActivity() {
     private var methodChannel: MethodChannel? = null
     private var isListening = false
 
+    // Volume observer for lockscreen volume changes
+    // Watches system STREAM_MUSIC volume and mirrors changes to the MA player
+    // when a remote/group player is active
+    private var audioManager: AudioManager? = null
+    private var volumeObserver: VolumeContentObserver? = null
+    private var isObservingVolume = false
+    private var lastKnownVolume: Int = -1
+    // Guard flag to ignore volume changes triggered by our own setStreamVolume calls
+    private var ignoringVolumeChange = false
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         Log.d(TAG, "Configuring Flutter engine, setting up MethodChannel")
+
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         methodChannel?.setMethodCallHandler { call, result ->
@@ -32,10 +50,104 @@ class MainActivity: AudioServiceActivity() {
                     Log.d(TAG, "Volume listening DISABLED")
                     result.success(null)
                 }
+                "startVolumeObserver" -> {
+                    // Start observing system volume for lockscreen volume changes.
+                    // Optional: initialVolume (0-100) sets the system volume to match
+                    // the MA player's current volume for a consistent HUD display.
+                    val initialVolume = call.argument<Int>("initialVolume")
+                    startVolumeObserver(initialVolume)
+                    result.success(null)
+                }
+                "stopVolumeObserver" -> {
+                    stopVolumeObserver()
+                    result.success(null)
+                }
+                "syncSystemVolume" -> {
+                    // Sync system volume to match MA player volume (0-100)
+                    val volume = call.argument<Int>("volume") ?: 0
+                    syncSystemVolume(volume)
+                    result.success(null)
+                }
                 else -> {
                     Log.d(TAG, "Unknown method: ${call.method}")
                     result.notImplemented()
                 }
+            }
+        }
+    }
+
+    /// Start observing system STREAM_MUSIC volume changes.
+    /// When a change is detected, sends an "absoluteVolumeChange" event to Flutter
+    /// with the new volume mapped to 0-100 scale.
+    private fun startVolumeObserver(initialVolume: Int?) {
+        if (isObservingVolume) return
+
+        val am = audioManager ?: return
+
+        // Optionally set system volume to match the MA player's current volume
+        if (initialVolume != null) {
+            syncSystemVolume(initialVolume)
+        }
+
+        lastKnownVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+
+        volumeObserver = VolumeContentObserver(Handler(Looper.getMainLooper()))
+        contentResolver.registerContentObserver(
+            Settings.System.CONTENT_URI,
+            true,
+            volumeObserver!!
+        )
+        isObservingVolume = true
+        Log.d(TAG, "Volume observer STARTED, initial system volume: $lastKnownVolume")
+    }
+
+    /// Stop observing system volume changes.
+    private fun stopVolumeObserver() {
+        if (!isObservingVolume) return
+
+        volumeObserver?.let {
+            contentResolver.unregisterContentObserver(it)
+        }
+        volumeObserver = null
+        isObservingVolume = false
+        Log.d(TAG, "Volume observer STOPPED")
+    }
+
+    /// Set the system STREAM_MUSIC volume to match an MA player volume (0-100).
+    /// Maps MA's 0-100 range to the device's 0-maxVolume range.
+    private fun syncSystemVolume(maVolume: Int) {
+        val am = audioManager ?: return
+        val maxSystemVolume = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val systemVolume = (maVolume * maxSystemVolume / 100).coerceIn(0, maxSystemVolume)
+
+        ignoringVolumeChange = true
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
+        lastKnownVolume = systemVolume
+        ignoringVolumeChange = false
+        Log.d(TAG, "Synced system volume: MA $maVolume% -> system $systemVolume/$maxSystemVolume")
+    }
+
+    /// ContentObserver that watches for system volume changes.
+    /// When volume changes (e.g., from lockscreen hardware buttons),
+    /// maps the change to a 0-100 value and sends to Flutter.
+    inner class VolumeContentObserver(handler: Handler) : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean) {
+            super.onChange(selfChange)
+
+            if (ignoringVolumeChange) return
+
+            val am = audioManager ?: return
+            val currentVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+
+            if (currentVolume != lastKnownVolume) {
+                val maxVolume = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                val maVolume = if (maxVolume > 0) (currentVolume * 100 / maxVolume) else 0
+
+                Log.d(TAG, "Volume observer: system $lastKnownVolume -> $currentVolume (MA: $maVolume%)")
+                lastKnownVolume = currentVolume
+
+                // Send the absolute volume (0-100) to Flutter
+                methodChannel?.invokeMethod("absoluteVolumeChange", maVolume)
             }
         }
     }
@@ -83,5 +195,10 @@ class MainActivity: AudioServiceActivity() {
                 super.dispatchKeyEvent(event)
             }
         }
+    }
+
+    override fun onDestroy() {
+        stopVolumeObserver()
+        super.onDestroy()
     }
 }
