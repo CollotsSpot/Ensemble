@@ -29,6 +29,7 @@ import '../services/database_service.dart';
 import '../services/library_status_service.dart';
 import '../services/image_helper_service.dart';
 import '../services/provider_filter_service.dart';
+import '../utils/player_sync_state.dart';
 import '../main.dart' show audioHandler;
 
 /// Main provider that coordinates connection, player, and library state.
@@ -125,6 +126,12 @@ class MusicAssistantProvider with ChangeNotifier {
     tracks: _tracks,
     podcasts: _podcasts,
     radioStations: _radioStations,
+  );
+
+  // Player sync state utility (created on demand)
+  PlayerSyncState get _playerSyncState => PlayerSyncState(
+    availablePlayers: _availablePlayers,
+    castToSendspinIdMap: _castToSendspinIdMap,
   );
 
   // Search state persistence
@@ -487,67 +494,12 @@ class MusicAssistantProvider with ChangeNotifier {
   /// Raw unfiltered players list (for internal use)
   List<Player> get availablePlayersUnfiltered => _availablePlayers;
 
-  /// Check if a player should show the "manually synced" indicator (yellow border)
-  /// Returns true for BOTH the leader AND children of a manually created sync group
-  /// Excludes pre-configured MA speaker groups (provider = 'player_group')
+  /// Check if a player should show the "manually synced" indicator (yellow border).
+  ///
+  /// Returns true for BOTH the leader AND children of a manually created sync group.
+  /// Excludes pre-configured MA speaker groups (provider = 'player_group').
   bool isPlayerManuallySynced(String playerId) {
-    final player = _availablePlayers.where((p) => p.playerId == playerId).firstOrNull;
-    if (player == null) return false;
-
-    // Group players (like "All Speakers") should NEVER have yellow border
-    // They are pre-configured containers, not manually synced players
-    // Check this FIRST before any other logic to prevent edge cases
-    if (player.provider == 'player_group') return false;
-
-    // Case 1: Player is a child synced to another player
-    if (player.syncedTo != null) {
-      // Look up sync target - also check translated IDs for Cast+Sendspin players
-      // The syncedTo might contain a Cast ID but the player list has the Sendspin version
-      Player? syncTarget = _availablePlayers.where((p) => p.playerId == player.syncedTo).firstOrNull;
-
-      // If not found, try looking up by translated Sendspin ID
-      if (syncTarget == null) {
-        final translatedId = _castToSendspinIdMap[player.syncedTo];
-        if (translatedId != null) {
-          syncTarget = _availablePlayers.where((p) => p.playerId == translatedId).firstOrNull;
-        }
-      }
-
-      // Also check reverse: syncedTo might be Sendspin ID, look for Cast player
-      if (syncTarget == null) {
-        // Build reverse map on demand
-        for (final entry in _castToSendspinIdMap.entries) {
-          if (entry.value == player.syncedTo) {
-            syncTarget = _availablePlayers.where((p) => p.playerId == entry.key).firstOrNull;
-            if (syncTarget != null) break;
-          }
-        }
-      }
-
-      if (syncTarget == null) return false;
-
-      // If synced to a group player, it's part of a pre-configured group
-      if (syncTarget.provider == 'player_group') return false;
-
-      // Synced to a regular player - this is a manual sync child
-      return true;
-    }
-
-    // Case 2: Player is a leader with group members
-    if (player.groupMembers != null && player.groupMembers!.length > 1) {
-      // Key distinction: In a MANUAL sync, the leader's own ID is in groupMembers
-      // In a PRE-CONFIGURED group (UGP), the group player's ID is NOT in groupMembers
-      // (the members are the child players, not including the group itself)
-      final isInOwnGroup = player.groupMembers!.contains(player.playerId);
-      if (!isInOwnGroup) {
-        // This is a pre-configured group player (like "All Speakers")
-        return false;
-      }
-      // Leader's ID is in groupMembers = manual sync
-      return true;
-    }
-
-    return false;
+    return _playerSyncState.isPlayerManuallySynced(playerId);
   }
 
   Track? get currentTrack => _currentTrack;
