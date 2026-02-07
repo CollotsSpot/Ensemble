@@ -31,6 +31,7 @@ import '../services/image_helper_service.dart';
 import '../services/provider_filter_service.dart';
 import '../services/queue_manager_service.dart';
 import '../services/search_service.dart';
+import '../utils/network_utils.dart';
 import '../utils/player_sort_utility.dart';
 import '../utils/player_sync_state.dart';
 import '../main.dart' show audioHandler;
@@ -5936,19 +5937,5 @@ class MusicAssistantProvider with ChangeNotifier {
   // ============================================================================
 
   /// Check if a hostname is a local/private network address
-  bool _isLocalNetworkHost(String host) {
-    return host.startsWith('192.168.') ||
-        host.startsWith('10.') ||
-        host.startsWith('172.16.') ||
-        host.startsWith('172.17.') ||
-        host.startsWith('172.18.') ||
-        host.startsWith('172.19.') ||
-        host.startsWith('172.2') ||
-        host.startsWith('172.30.') ||
-        host.startsWith('172.31.') ||
-        host == 'localhost' ||
-        host.startsWith('127.') ||
-        host.endsWith('.local') ||
-        host.endsWith('.ts.net'); // Tailscale - treat as local since it's a VPN
-  }
+  bool _isLocalNetworkHost(String host) => NetworkUtils.isLocalNetworkHost(host);
 }
