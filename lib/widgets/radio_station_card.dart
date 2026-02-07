@@ -47,10 +47,10 @@ class _RadioStationCardState extends State<RadioStationCard> with LibraryStatusM
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.radioStation.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.radioStation.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
   }
 

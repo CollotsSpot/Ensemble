@@ -121,7 +121,7 @@ class _AudiobookRowState extends State<AudiobookRow> with AutomaticKeepAliveClie
       );
     }
 
-    const textAreaHeight = 44.0;
+    const textAreaHeight = 48.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize;
     final itemExtent = cardWidth + 12;
@@ -223,10 +223,10 @@ class _AudiobookCardState extends State<_AudiobookCard> with LibraryStatusMixin 
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.audiobook.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.audiobook.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
   }
 

@@ -14,11 +14,12 @@ class PlayerSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use select to only rebuild when player data changes (not on every provider update)
-    final (selectedPlayer, availablePlayers) = context.select<MusicAssistantProvider, (dynamic, List)>(
-      (p) => (p.selectedPlayer, p.availablePlayers),
-    );
     final colorScheme = Theme.of(context).colorScheme;
+
+    return Consumer<MusicAssistantProvider>(
+      builder: (context, maProvider, _) {
+        final selectedPlayer = maProvider.selectedPlayer;
+        final availablePlayers = maProvider.availablePlayers;
 
     // Count players that are currently playing MA content (excluding selected player)
     // User already sees if selected player is playing, badge shows "other" activity
@@ -79,6 +80,8 @@ class PlayerSelector extends StatelessWidget {
           ),
         ),
       ),
+    );
+      },
     );
   }
 

@@ -113,8 +113,8 @@ class _AlbumRowState extends State<AlbumRow> with AutomaticKeepAliveClientMixin 
     }
 
     // Card layout: square artwork + text below
-    // Text area: 8px gap + ~18px title + ~18px artist = ~44px
-    const textAreaHeight = 44.0;
+    // Text area: 8px gap + ~20px title + ~20px artist = ~48px
+    const textAreaHeight = 48.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize; // Card width = artwork width (square)
     final itemExtent = cardWidth + 12; // width + horizontal margins

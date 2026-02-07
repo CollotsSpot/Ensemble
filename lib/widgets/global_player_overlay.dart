@@ -478,10 +478,10 @@ class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    // PERF: Use select() to only rebuild when connection state or player changes
-    final (isConnected, hasSelectedPlayer) = context.select<MusicAssistantProvider, (bool, bool)>(
-      (p) => (p.isConnected, p.selectedPlayer != null),
-    );
+    return Consumer<MusicAssistantProvider>(
+      builder: (context, maProvider, _) {
+        final isConnected = maProvider.isConnected;
+        final hasSelectedPlayer = maProvider.selectedPlayer != null;
 
     // Compute whether this is a first-time user ready for welcome screen.
     // This is SYNCHRONOUS - no setState needed - so it works in the same frame.
@@ -848,6 +848,8 @@ class _GlobalPlayerOverlayState extends State<GlobalPlayerOverlay>
         ),
       ],
       ),
+    );
+      },
     );
   }
 }

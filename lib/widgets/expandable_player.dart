@@ -244,7 +244,11 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     // Reset expansion notifier to match initial controller state (0.0)
     // This fixes a bug where stale progress values from a previous widget instance
     // caused the nav bar to be invisible on app restart/widget recreation
-    playerExpansionNotifier.value = PlayerExpansionState(0.0, null, null);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        playerExpansionNotifier.value = PlayerExpansionState(0.0, null, null);
+      }
+    });
 
     _controller = AnimationController(
       duration: const Duration(milliseconds: 300),

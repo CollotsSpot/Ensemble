@@ -108,8 +108,8 @@ class _TrackRowState extends State<TrackRow> with AutomaticKeepAliveClientMixin 
     }
 
     // Card layout: square artwork + text below
-    // Text area: 8px gap + ~18px title + ~18px artist = ~44px
-    const textAreaHeight = 44.0;
+    // Text area: 8px gap + ~20px title + ~20px artist = ~48px
+    const textAreaHeight = 48.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize; // Card width = artwork width (square)
     final itemExtent = cardWidth + 12;
@@ -211,10 +211,10 @@ class _TrackCardState extends State<_TrackCard> with LibraryStatusMixin {
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.track.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.track.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
   }
 
@@ -453,22 +453,26 @@ class _TrackCardState extends State<_TrackCard> with LibraryStatusMixin {
             ),
             const SizedBox(height: 8),
             // Track title
-            Text(
-              widget.track.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.titleSmall?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: Text(
+                widget.track.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.titleSmall?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             // Artist name
-            Text(
-              widget.track.artistsString,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.7),
+            Flexible(
+              child: Text(
+                widget.track.artistsString,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
           ],

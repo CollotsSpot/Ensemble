@@ -62,6 +62,18 @@ class LibraryStatusService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Initialize library status without notifying listeners.
+  /// Use during initState to sync service from widget data without triggering rebuilds.
+  void initLibraryStatus(String key, bool inLibrary) {
+    _libraryStatus[key] ??= inLibrary;
+  }
+
+  /// Initialize favorite status without notifying listeners.
+  /// Use during initState to sync service from widget data without triggering rebuilds.
+  void initFavoriteStatus(String key, bool favorite) {
+    _favoriteStatus[key] ??= favorite;
+  }
+
   /// Mark operation as pending (for rollback tracking)
   void markLibraryPending(String key, bool previousValue) {
     _pendingLibraryOps[key] = previousValue;

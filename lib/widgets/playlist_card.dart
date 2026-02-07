@@ -50,10 +50,10 @@ class _PlaylistCardState extends State<PlaylistCard> with LibraryStatusMixin {
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.playlist.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.playlist.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
   }
 
@@ -327,22 +327,26 @@ class _PlaylistCardState extends State<PlaylistCard> with LibraryStatusMixin {
             const SizedBox(height: 8),
             // Playlist title
             // PERF: Removed Hero - text animations provide minimal benefit but add overhead
-            Text(
-              widget.playlist.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.titleSmall?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: Text(
+                widget.playlist.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.titleSmall?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             // Owner/track count
-            Text(
-              widget.playlist.owner ?? (widget.playlist.trackCount != null ? '${widget.playlist.trackCount} tracks' : ''),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.7),
+            Flexible(
+              child: Text(
+                widget.playlist.owner ?? (widget.playlist.trackCount != null ? '${widget.playlist.trackCount} tracks' : ''),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
           ],

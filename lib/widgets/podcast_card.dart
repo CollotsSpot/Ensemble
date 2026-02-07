@@ -53,10 +53,10 @@ class _PodcastCardState extends State<PodcastCard> with LibraryStatusMixin {
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.podcast.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.podcast.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
   }
 
@@ -333,22 +333,26 @@ class _PodcastCardState extends State<PodcastCard> with LibraryStatusMixin {
             const SizedBox(height: 8),
             // Podcast title
             // PERF: Removed Hero - text animations provide minimal benefit but add overhead
-            Text(
-              widget.podcast.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.titleSmall?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: Text(
+                widget.podcast.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.titleSmall?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             // Podcast author (if available)
-            Text(
-              _getAuthor(widget.podcast),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.7),
+            Flexible(
+              child: Text(
+                _getAuthor(widget.podcast),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
           ],

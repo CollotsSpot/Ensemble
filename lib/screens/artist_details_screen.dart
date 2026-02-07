@@ -69,10 +69,10 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> with LibraryS
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && _checkIfInLibrary(widget.artist)) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.artist.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
     // Use initial image URL immediately for smooth hero animation
     _artistImageUrl = widget.initialImageUrl;

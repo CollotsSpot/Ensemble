@@ -6,12 +6,52 @@ import '../widgets/album_card.dart';
 import '../widgets/common/empty_state.dart';
 import '../l10n/app_localizations.dart';
 
-class LibraryAlbumsScreen extends StatelessWidget {
+class LibraryAlbumsScreen extends StatefulWidget {
   const LibraryAlbumsScreen({super.key});
 
   @override
+  State<LibraryAlbumsScreen> createState() => _LibraryAlbumsScreenState();
+}
+
+class _LibraryAlbumsScreenState extends State<LibraryAlbumsScreen> {
+  List<Album> _albums = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = context.read<MusicAssistantProvider>();
+    _albums = provider.albums;
+    _isLoading = provider.isLoading;
+    provider.addListener(_onProviderChanged);
+
+    // Auto-load library if empty
+    if (_albums.isEmpty && !_isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          provider.loadLibrary();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    context.read<MusicAssistantProvider>().removeListener(_onProviderChanged);
+    super.dispose();
+  }
+
+  void _onProviderChanged() {
+    if (!mounted) return;
+    final provider = context.read<MusicAssistantProvider>();
+    setState(() {
+      _albums = provider.albums;
+      _isLoading = provider.isLoading;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Use Selector for targeted rebuilds - only rebuild when albums or loading state changes
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -34,13 +74,7 @@ class LibraryAlbumsScreen extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: Selector<MusicAssistantProvider, (List<Album>, bool)>(
-        selector: (_, provider) => (provider.albums, provider.isLoading),
-        builder: (context, data, _) {
-          final (albums, isLoading) = data;
-          return _buildAlbumsList(context, albums, isLoading);
-        },
-      ),
+      body: _buildAlbumsList(context, _albums, _isLoading),
     );
   }
 
@@ -93,4 +127,3 @@ class LibraryAlbumsScreen extends StatelessWidget {
     );
   }
 }
-

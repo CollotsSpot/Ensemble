@@ -233,6 +233,16 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
 
     // Listen to SyncService for library data updates
     SyncService.instance.addListener(_onSyncServiceChanged);
+
+    // Auto-load library if empty
+    final maProvider = context.read<MusicAssistantProvider>();
+    if (maProvider.albums.isEmpty && maProvider.artists.isEmpty && !maProvider.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          maProvider.loadLibrary();
+        }
+      });
+    }
   }
 
   void _onSyncServiceChanged() {
@@ -3420,178 +3430,179 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
   Widget _buildPodcastsTab(BuildContext context, S l10n) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    // PERF: Use select() to only rebuild when podcasts, loading state, or enabled providers changes
-    // Use podcastsUnfiltered to avoid double-filtering with MA's provider filter
-    final (allPodcasts, isLoading, enabledProviders) = context.select<MusicAssistantProvider, (List<MediaItem>, bool, Set<String>)>(
-      (p) => (p.podcastsUnfiltered, p.isLoadingPodcasts, p.enabledProviderIds.toSet()),
-    );
-    // Use read() for methods that don't need reactive updates
-    final maProvider = context.read<MusicAssistantProvider>();
 
-    if (isLoading) {
-      return Center(child: CircularProgressIndicator(color: colorScheme.primary));
-    }
+    return Consumer<MusicAssistantProvider>(
+      builder: (context, maProvider, _) {
+        final allPodcasts = maProvider.podcastsUnfiltered;
+        final isLoading = maProvider.isLoadingPodcasts;
+        final enabledProviders = maProvider.enabledProviderIds.toSet();
 
-    // Filter by enabled providers using providerMappings
-    final filteredPodcasts = enabledProviders.isNotEmpty
-        ? allPodcasts.where((p) {
-            final mappings = p.providerMappings;
-            if (mappings == null || mappings.isEmpty) return false;
-            // Only match if the item is IN the library for an enabled provider
-            return mappings.any((m) => m.inLibrary && enabledProviders.contains(m.providerInstance));
-          }).toList()
-        : allPodcasts;
+        if (isLoading) {
+          return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+        }
 
-    // Filter by favorites if enabled
-    final podcasts = _showFavoritesOnly
-        ? filteredPodcasts.where((p) => p.favorite == true).toList()
-        : filteredPodcasts;
+        // Filter by enabled providers using providerMappings
+        final filteredPodcasts = enabledProviders.isNotEmpty
+            ? allPodcasts.where((p) {
+                final mappings = p.providerMappings;
+                if (mappings == null || mappings.isEmpty) return false;
+                // Only match if the item is IN the library for an enabled provider
+                return mappings.any((m) => m.inLibrary && enabledProviders.contains(m.providerInstance));
+              }).toList()
+            : allPodcasts;
 
-    if (podcasts.isEmpty) {
-      if (_showFavoritesOnly) {
-        return EmptyState.custom(
-          context: context,
-          icon: Icons.favorite_border,
-          title: l10n.noFavoritePodcasts,
-          subtitle: l10n.longPressPodcastHint,
-        );
-      }
-      return EmptyState.custom(
-        context: context,
-        icon: MdiIcons.podcast,
-        title: l10n.noPodcasts,
-        subtitle: l10n.addPodcastsHint,
-        onRefresh: () => maProvider.loadPodcasts(),
-      );
-    }
+        // Filter by favorites if enabled
+        final podcasts = _showFavoritesOnly
+            ? filteredPodcasts.where((p) => p.favorite == true).toList()
+            : filteredPodcasts;
 
-    // Trust server-side sorting - don't re-sort client-side
-    // Server handles: name, name_desc, timestamp_added_desc, last_played_desc, play_count_desc
-    final sortedPodcasts = podcasts;
+        if (podcasts.isEmpty) {
+          if (_showFavoritesOnly) {
+            return EmptyState.custom(
+              context: context,
+              icon: Icons.favorite_border,
+              title: l10n.noFavoritePodcasts,
+              subtitle: l10n.longPressPodcastHint,
+            );
+          }
+          return EmptyState.custom(
+            context: context,
+            icon: MdiIcons.podcast,
+            title: l10n.noPodcasts,
+            subtitle: l10n.addPodcastsHint,
+            onRefresh: () => maProvider.loadPodcasts(),
+          );
+        }
 
-    // Pre-cache podcast images for smooth hero animations
-    _precachePodcastImages(sortedPodcasts, maProvider);
+        // Trust server-side sorting - don't re-sort client-side
+        // Server handles: name, name_desc, timestamp_added_desc, last_played_desc, play_count_desc
+        final sortedPodcasts = podcasts;
 
-    // PERF: Request larger images from API but decode at appropriate size for memory
-    // Use consistent 256 for all views to improve hero animation smoothness (matches detail screen)
-    const cacheSize = 256;
+        // Pre-cache podcast images for smooth hero animations
+        _precachePodcastImages(sortedPodcasts, maProvider);
 
-    // Generate podcast names for letter scrollbar
-    final podcastNames = sortedPodcasts.map((p) => p.name).toList();
+        // PERF: Request larger images from API but decode at appropriate size for memory
+        // Use consistent 256 for all views to improve hero animation smoothness (matches detail screen)
+        const cacheSize = 256;
 
-    return RefreshIndicator(
-      color: colorScheme.primary,
-      backgroundColor: colorScheme.background,
-      onRefresh: () => maProvider.loadPodcasts(),
-      child: LetterScrollbar(
-        controller: _podcastsScrollController,
-        items: podcastNames,
-        displayMode: _getScrollbarDisplayMode(_podcastsSortOrder),
-        onDragStateChanged: _onLetterScrollbarDragChanged,
-        bottomPadding: BottomSpacing.withMiniPlayer,
-        child: _podcastsViewMode == 'list'
-          ? ListView.builder(
-              controller: _podcastsScrollController,
-              key: const PageStorageKey<String>('podcasts_list'),
-              cacheExtent: 1000,
-              itemExtent: 67,
-              padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
-              itemCount: sortedPodcasts.length,
-              itemBuilder: (context, index) {
-                final podcast = sortedPodcasts[index];
-                // iTunes URL from persisted cache (loaded on app start for instant high-res)
-                final imageUrl = maProvider.getPodcastImageUrl(podcast);
+        // Generate podcast names for letter scrollbar
+        final podcastNames = sortedPodcasts.map((p) => p.name).toList();
 
-                return GestureDetector(
-                  onLongPressStart: (details) {
-                    MediaContextMenu.show(
-                      context: context,
-                      position: details.globalPosition,
-                      mediaType: ContextMenuMediaType.podcast,
-                      item: podcast,
-                      isFavorite: podcast.favorite ?? false,
-                      isInLibrary: true,
-                      onToggleFavorite: () => _togglePodcastFavorite(podcast),
-                      onToggleLibrary: () => _togglePodcastLibrary(podcast),
+        return RefreshIndicator(
+          color: colorScheme.primary,
+          backgroundColor: colorScheme.background,
+          onRefresh: () => maProvider.loadPodcasts(),
+          child: LetterScrollbar(
+            controller: _podcastsScrollController,
+            items: podcastNames,
+            displayMode: _getScrollbarDisplayMode(_podcastsSortOrder),
+            onDragStateChanged: _onLetterScrollbarDragChanged,
+            bottomPadding: BottomSpacing.withMiniPlayer,
+            child: _podcastsViewMode == 'list'
+              ? ListView.builder(
+                  controller: _podcastsScrollController,
+                  key: const PageStorageKey<String>('podcasts_list'),
+                  cacheExtent: 1000,
+                  itemExtent: 67,
+                  padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                  itemCount: sortedPodcasts.length,
+                  itemBuilder: (context, index) {
+                    final podcast = sortedPodcasts[index];
+                    // iTunes URL from persisted cache (loaded on app start for instant high-res)
+                    final imageUrl = maProvider.getPodcastImageUrl(podcast);
+
+                    return GestureDetector(
+                      onLongPressStart: (details) {
+                        MediaContextMenu.show(
+                          context: context,
+                          position: details.globalPosition,
+                          mediaType: ContextMenuMediaType.podcast,
+                          item: podcast,
+                          isFavorite: podcast.favorite ?? false,
+                          isInLibrary: true,
+                          onToggleFavorite: () => _togglePodcastFavorite(podcast),
+                          onToggleLibrary: () => _togglePodcastLibrary(podcast),
+                        );
+                      },
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        minVerticalPadding: 0,
+                        leading: Hero(
+                          tag: HeroTags.podcastCover + (podcast.uri ?? podcast.itemId) + '_library',
+                          // Match detail screen: ClipRRect(16) → Container → CachedNetworkImage
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              color: colorScheme.surfaceContainerHighest,
+                              child: imageUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: imageUrl,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      // FIXED: Add memCacheWidth to ensure consistent decode size for smooth Hero
+                                      memCacheWidth: 256,
+                                      memCacheHeight: 256,
+                                      fadeInDuration: Duration.zero,
+                                      fadeOutDuration: Duration.zero,
+                                      placeholder: (_, __) => const SizedBox(),
+                                      errorWidget: (_, __, ___) => Icon(
+                                        MdiIcons.podcast,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    )
+                                  : Icon(
+                                      MdiIcons.podcast,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          podcast.name,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: podcast.metadata?['author'] != null
+                            ? Text(
+                                podcast.metadata!['author'] as String,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface.withOpacity(0.6),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )
+                            : null,
+                        onTap: () => _openPodcastDetails(podcast, maProvider, imageUrl),
+                      ),
                     );
                   },
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    minVerticalPadding: 0,
-                    leading: Hero(
-                      tag: HeroTags.podcastCover + (podcast.uri ?? podcast.itemId) + '_library',
-                      // Match detail screen: ClipRRect(16) → Container → CachedNetworkImage
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          color: colorScheme.surfaceContainerHighest,
-                          child: imageUrl != null
-                              ? CachedNetworkImage(
-                                  imageUrl: imageUrl,
-                                  width: 48,
-                                  height: 48,
-                                  fit: BoxFit.cover,
-                                  // FIXED: Add memCacheWidth to ensure consistent decode size for smooth Hero
-                                  memCacheWidth: 256,
-                                  memCacheHeight: 256,
-                                  fadeInDuration: Duration.zero,
-                                  fadeOutDuration: Duration.zero,
-                                  placeholder: (_, __) => const SizedBox(),
-                                  errorWidget: (_, __, ___) => Icon(
-                                    MdiIcons.podcast,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                )
-                              : Icon(
-                                  MdiIcons.podcast,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      podcast.name,
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: podcast.metadata?['author'] != null
-                        ? Text(
-                            podcast.metadata!['author'] as String,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withOpacity(0.6),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          )
-                        : null,
-                    onTap: () => _openPodcastDetails(podcast, maProvider, imageUrl),
+                )
+              : GridView.builder(
+                  controller: _podcastsScrollController,
+                  key: PageStorageKey<String>('podcasts_grid_$_podcastsViewMode'),
+                  cacheExtent: 1000,
+                  padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: _podcastsViewMode == 'grid3' ? 3 : 2,
+                    childAspectRatio: _podcastsViewMode == 'grid3' ? 0.75 : 0.80,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
                   ),
-                );
-              },
-            )
-          : GridView.builder(
-              controller: _podcastsScrollController,
-              key: PageStorageKey<String>('podcasts_grid_$_podcastsViewMode'),
-              cacheExtent: 1000,
-              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _podcastsViewMode == 'grid3' ? 3 : 2,
-                childAspectRatio: _podcastsViewMode == 'grid3' ? 0.75 : 0.80,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: sortedPodcasts.length,
-              itemBuilder: (context, index) {
-                final podcast = sortedPodcasts[index];
-                return _buildPodcastCard(podcast, maProvider, cacheSize);
-              },
-            ),
-      ),
+                  itemCount: sortedPodcasts.length,
+                  itemBuilder: (context, index) {
+                    final podcast = sortedPodcasts[index];
+                    return _buildPodcastCard(podcast, maProvider, cacheSize);
+                  },
+                ),
+          ),
+        );
+      },
     );
   }
 
@@ -3724,171 +3735,172 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
   Widget _buildRadioStationsTab(BuildContext context, S l10n) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    // PERF: Use select() to only rebuild when radio stations, loading state, or enabled providers changes
-    // Use radioStationsUnfiltered to avoid double-filtering with MA's provider filter
-    final (allRadioStations, isLoading, enabledProviders) = context.select<MusicAssistantProvider, (List<MediaItem>, bool, Set<String>)>(
-      (p) => (p.radioStationsUnfiltered, p.isLoadingRadio, p.enabledProviderIds.toSet()),
-    );
-    // Use read() for methods that don't need reactive updates
-    final maProvider = context.read<MusicAssistantProvider>();
 
-    if (isLoading) {
-      return Center(child: CircularProgressIndicator(color: colorScheme.primary));
-    }
+    return Consumer<MusicAssistantProvider>(
+      builder: (context, maProvider, _) {
+        final allRadioStations = maProvider.radioStationsUnfiltered;
+        final isLoading = maProvider.isLoadingRadio;
+        final enabledProviders = maProvider.enabledProviderIds.toSet();
 
-    // Filter by enabled providers using providerMappings
-    final filteredRadioStations = enabledProviders.isNotEmpty
-        ? allRadioStations.where((s) {
-            final mappings = s.providerMappings;
-            if (mappings == null || mappings.isEmpty) return false;
-            return mappings.any((m) => enabledProviders.contains(m.providerInstance));
-          }).toList()
-        : allRadioStations;
+        if (isLoading) {
+          return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+        }
 
-    // Filter by favorites if enabled
-    final radioStations = _showFavoritesOnly
-        ? filteredRadioStations.where((s) => s.favorite == true).toList()
-        : filteredRadioStations;
+        // Filter by enabled providers using providerMappings
+        final filteredRadioStations = enabledProviders.isNotEmpty
+            ? allRadioStations.where((s) {
+                final mappings = s.providerMappings;
+                if (mappings == null || mappings.isEmpty) return false;
+                return mappings.any((m) => enabledProviders.contains(m.providerInstance));
+              }).toList()
+            : allRadioStations;
 
-    if (radioStations.isEmpty) {
-      if (_showFavoritesOnly) {
-        return EmptyState.custom(
-          context: context,
-          icon: Icons.favorite_border,
-          title: l10n.noFavoriteRadioStations,
-          subtitle: l10n.longPressRadioHint,
-        );
-      }
-      return EmptyState.custom(
-        context: context,
-        icon: MdiIcons.radio,
-        title: l10n.noRadioStations,
-        subtitle: l10n.addRadioStationsHint,
-        onRefresh: () => maProvider.loadRadioStations(),
-      );
-    }
+        // Filter by favorites if enabled
+        final radioStations = _showFavoritesOnly
+            ? filteredRadioStations.where((s) => s.favorite == true).toList()
+            : filteredRadioStations;
 
-    // PERF: Use appropriate cache size based on view mode
-    final cacheSize = _radioViewMode == 'grid3' ? 200 : 256;
+        if (radioStations.isEmpty) {
+          if (_showFavoritesOnly) {
+            return EmptyState.custom(
+              context: context,
+              icon: Icons.favorite_border,
+              title: l10n.noFavoriteRadioStations,
+              subtitle: l10n.longPressRadioHint,
+            );
+          }
+          return EmptyState.custom(
+            context: context,
+            icon: MdiIcons.radio,
+            title: l10n.noRadioStations,
+            subtitle: l10n.addRadioStationsHint,
+            onRefresh: () => maProvider.loadRadioStations(),
+          );
+        }
 
-    // Trust server-side sorting - don't re-sort client-side
-    // Server handles: name, name_desc, timestamp_added_desc, last_played_desc, play_count_desc
-    final sortedRadioStations = radioStations;
+        // PERF: Use appropriate cache size based on view mode
+        final cacheSize = _radioViewMode == 'grid3' ? 200 : 256;
 
-    // Generate radio station names for letter scrollbar
-    final radioNames = sortedRadioStations.map((s) => s.name).toList();
+        // Trust server-side sorting - don't re-sort client-side
+        // Server handles: name, name_desc, timestamp_added_desc, last_played_desc, play_count_desc
+        final sortedRadioStations = radioStations;
 
-    return RefreshIndicator(
-      color: colorScheme.primary,
-      backgroundColor: colorScheme.background,
-      onRefresh: () => maProvider.loadRadioStations(),
-      child: LetterScrollbar(
-        controller: _radioScrollController,
-        items: radioNames,
-        displayMode: _getScrollbarDisplayMode(_radioSortOrder),
-        onDragStateChanged: _onLetterScrollbarDragChanged,
-        bottomPadding: BottomSpacing.withMiniPlayer,
-        child: _radioViewMode == 'list'
-          ? ListView.builder(
-              controller: _radioScrollController,
-              key: const PageStorageKey<String>('radio_stations_list'),
-              cacheExtent: 1000,
-              itemExtent: 67,
-              padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
-              itemCount: sortedRadioStations.length,
-              itemBuilder: (context, index) {
-                final station = sortedRadioStations[index];
-                final imageUrl = maProvider.getImageUrl(station, size: cacheSize);
+        // Generate radio station names for letter scrollbar
+        final radioNames = sortedRadioStations.map((s) => s.name).toList();
 
-                return GestureDetector(
-                  onLongPressStart: (details) {
-                    MediaContextMenu.show(
-                      context: context,
-                      position: details.globalPosition,
-                      mediaType: ContextMenuMediaType.radio,
-                      item: station,
-                      isFavorite: station.favorite ?? false,
-                      isInLibrary: true,
-                      onToggleFavorite: () => _toggleRadioFavorite(station),
-                      onToggleLibrary: () => _toggleRadioLibrary(station),
+        return RefreshIndicator(
+          color: colorScheme.primary,
+          backgroundColor: colorScheme.background,
+          onRefresh: () => maProvider.loadRadioStations(),
+          child: LetterScrollbar(
+            controller: _radioScrollController,
+            items: radioNames,
+            displayMode: _getScrollbarDisplayMode(_radioSortOrder),
+            onDragStateChanged: _onLetterScrollbarDragChanged,
+            bottomPadding: BottomSpacing.withMiniPlayer,
+            child: _radioViewMode == 'list'
+              ? ListView.builder(
+                  controller: _radioScrollController,
+                  key: const PageStorageKey<String>('radio_stations_list'),
+                  cacheExtent: 1000,
+                  itemExtent: 67,
+                  padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                  itemCount: sortedRadioStations.length,
+                  itemBuilder: (context, index) {
+                    final station = sortedRadioStations[index];
+                    final imageUrl = maProvider.getImageUrl(station, size: cacheSize);
+
+                    return GestureDetector(
+                      onLongPressStart: (details) {
+                        MediaContextMenu.show(
+                          context: context,
+                          position: details.globalPosition,
+                          mediaType: ContextMenuMediaType.radio,
+                          item: station,
+                          isFavorite: station.favorite ?? false,
+                          isInLibrary: true,
+                          onToggleFavorite: () => _toggleRadioFavorite(station),
+                          onToggleLibrary: () => _toggleRadioLibrary(station),
+                        );
+                      },
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        minVerticalPadding: 0,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: imageUrl != null
+                              ? CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                  memCacheWidth: 128,
+                                  memCacheHeight: 128,
+                                  fadeInDuration: Duration.zero,
+                                  fadeOutDuration: Duration.zero,
+                                  placeholder: (context, url) => Container(
+                                    width: 48,
+                                    height: 48,
+                                    color: colorScheme.surfaceVariant,
+                                    child: Icon(MdiIcons.radio, color: colorScheme.onSurfaceVariant),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    width: 48,
+                                    height: 48,
+                                    color: colorScheme.surfaceVariant,
+                                    child: Icon(MdiIcons.radio, color: colorScheme.onSurfaceVariant),
+                                  ),
+                                )
+                              : Container(
+                                  width: 48,
+                                  height: 48,
+                                  color: colorScheme.surfaceVariant,
+                                  child: Icon(MdiIcons.radio, color: colorScheme.onSurfaceVariant),
+                                ),
+                        ),
+                        title: Text(
+                          station.name,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: station.metadata?['description'] != null
+                            ? Text(
+                                station.metadata!['description'] as String,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface.withOpacity(0.6),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )
+                            : null,
+                        onTap: () => _playRadioStation(maProvider, station),
+                      ),
                     );
                   },
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    minVerticalPadding: 0,
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: imageUrl != null
-                          ? CachedNetworkImage(
-                              imageUrl: imageUrl,
-                              width: 48,
-                              height: 48,
-                              fit: BoxFit.cover,
-                              memCacheWidth: 128,
-                              memCacheHeight: 128,
-                              fadeInDuration: Duration.zero,
-                              fadeOutDuration: Duration.zero,
-                              placeholder: (context, url) => Container(
-                                width: 48,
-                                height: 48,
-                                color: colorScheme.surfaceVariant,
-                                child: Icon(MdiIcons.radio, color: colorScheme.onSurfaceVariant),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                width: 48,
-                                height: 48,
-                                color: colorScheme.surfaceVariant,
-                                child: Icon(MdiIcons.radio, color: colorScheme.onSurfaceVariant),
-                              ),
-                            )
-                          : Container(
-                              width: 48,
-                              height: 48,
-                              color: colorScheme.surfaceVariant,
-                              child: Icon(MdiIcons.radio, color: colorScheme.onSurfaceVariant),
-                            ),
-                    ),
-                    title: Text(
-                      station.name,
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: station.metadata?['description'] != null
-                        ? Text(
-                            station.metadata!['description'] as String,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withOpacity(0.6),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          )
-                        : null,
-                    onTap: () => _playRadioStation(maProvider, station),
+                )
+              : GridView.builder(
+                  controller: _radioScrollController,
+                  key: PageStorageKey<String>('radio_stations_grid_$_radioViewMode'),
+                  cacheExtent: 1000,
+                  padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: _radioViewMode == 'grid3' ? 3 : 2,
+                    childAspectRatio: _radioViewMode == 'grid3' ? 0.75 : 0.80,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
                   ),
-                );
-              },
-            )
-          : GridView.builder(
-              controller: _radioScrollController,
-              key: PageStorageKey<String>('radio_stations_grid_$_radioViewMode'),
-              cacheExtent: 1000,
-              padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _radioViewMode == 'grid3' ? 3 : 2,
-                childAspectRatio: _radioViewMode == 'grid3' ? 0.75 : 0.80,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: sortedRadioStations.length,
-              itemBuilder: (context, index) {
-                final station = sortedRadioStations[index];
-                return _buildRadioCard(station, maProvider, cacheSize);
-              },
-            ),
-      ),
+                  itemCount: sortedRadioStations.length,
+                  itemBuilder: (context, index) {
+                    final station = sortedRadioStations[index];
+                    return _buildRadioCard(station, maProvider, cacheSize);
+                  },
+                ),
+          ),
+        );
+      },
     );
   }
 
@@ -3972,97 +3984,99 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
 
   // ============ ARTISTS TAB ============
   Widget _buildArtistsTab(BuildContext context, S l10n) {
-    // Use select to only rebuild when specific fields change
-    // SyncService changes are handled by _onSyncServiceChanged listener
-    final (isLoading, enabledProviders) = context.select<MusicAssistantProvider, (bool, Set<String>)>(
-      (p) => (p.isLoading, p.enabledProviderIds.toSet()),
-    );
     final colorScheme = Theme.of(context).colorScheme;
     final syncService = SyncService.instance;
 
-    // Show loading only if actually loading AND no cached data available
-    if (isLoading && syncService.cachedArtists.isEmpty) {
-      return Center(child: CircularProgressIndicator(color: colorScheme.primary));
-    }
+    return Consumer<MusicAssistantProvider>(
+      builder: (context, maProvider, _) {
+        final isLoading = maProvider.isLoading;
+        final enabledProviders = maProvider.enabledProviderIds.toSet();
 
-    // Always use SyncService data - it has the complete library with source tracking
-    final filteredArtists = enabledProviders.isNotEmpty
-        ? syncService.getArtistsFilteredByProviders(enabledProviders)
-        : syncService.cachedArtists;
+        // Show loading only if actually loading AND no cached data available
+        if (isLoading && syncService.cachedArtists.isEmpty) {
+          return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+        }
 
-    // Filter by favorites if enabled
-    final artists = _showFavoritesOnly
-        ? filteredArtists.where((a) => a.favorite == true).toList()
-        : filteredArtists;
+        // Always use SyncService data - it has the complete library with source tracking
+        final filteredArtists = enabledProviders.isNotEmpty
+            ? syncService.getArtistsFilteredByProviders(enabledProviders)
+            : syncService.cachedArtists;
 
-    if (artists.isEmpty) {
-      if (_showFavoritesOnly) {
-        return EmptyState.custom(
-          context: context,
-          icon: Icons.favorite_border,
-          title: l10n.noFavoriteArtists,
-          subtitle: l10n.tapHeartArtist,
+        // Filter by favorites if enabled
+        final artists = _showFavoritesOnly
+            ? filteredArtists.where((a) => a.favorite == true).toList()
+            : filteredArtists;
+
+        if (artists.isEmpty) {
+          if (_showFavoritesOnly) {
+            return EmptyState.custom(
+              context: context,
+              icon: Icons.favorite_border,
+              title: l10n.noFavoriteArtists,
+              subtitle: l10n.tapHeartArtist,
+            );
+          }
+          return EmptyState.artists(
+            context: context,
+            onRefresh: () => maProvider.loadLibrary(),
+          );
+        }
+
+        // PERF: Use cached sorting - only re-sorts when data or sort order changes
+        final sortedArtists = _getSortedArtists(artists);
+        final artistNames = _cachedArtistNames;
+
+        return RefreshIndicator(
+          color: colorScheme.primary,
+          backgroundColor: colorScheme.background,
+          onRefresh: () async => maProvider.loadLibrary(),
+          child: LetterScrollbar(
+            controller: _artistsScrollController,
+            items: artistNames,
+            displayMode: _getScrollbarDisplayMode(_artistsSortOrder),
+            onDragStateChanged: _onLetterScrollbarDragChanged,
+            bottomPadding: BottomSpacing.withMiniPlayer,
+            child: _artistsViewMode == 'list'
+                ? ListView.builder(
+                    controller: _artistsScrollController,
+                    key: PageStorageKey<String>('library_artists_list_${_showFavoritesOnly ? 'fav' : 'all'}_$_artistsViewMode'),
+                    cacheExtent: 1000,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: false,
+                    itemExtent: 67,
+                    itemCount: sortedArtists.length,
+                    padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                    itemBuilder: (context, index) {
+                      final artist = sortedArtists[index];
+                      return _buildArtistTile(
+                        context,
+                        artist,
+                        key: ValueKey(artist.uri ?? artist.itemId),
+                      );
+                    },
+                  )
+                : GridView.builder(
+                    controller: _artistsScrollController,
+                    key: PageStorageKey<String>('library_artists_grid_${_showFavoritesOnly ? 'fav' : 'all'}_$_artistsViewMode'),
+                    cacheExtent: 1000,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: false,
+                    padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: _artistsViewMode == 'grid3' ? 3 : 2,
+                      childAspectRatio: _artistsViewMode == 'grid3' ? 0.75 : 0.80,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: sortedArtists.length,
+                    itemBuilder: (context, index) {
+                      final artist = sortedArtists[index];
+                      return _buildArtistGridCard(context, artist);
+                    },
+                  ),
+          ),
         );
-      }
-      return EmptyState.artists(
-        context: context,
-        onRefresh: () => context.read<MusicAssistantProvider>().loadLibrary(),
-      );
-    }
-
-    // PERF: Use cached sorting - only re-sorts when data or sort order changes
-    final sortedArtists = _getSortedArtists(artists);
-    final artistNames = _cachedArtistNames;
-
-    return RefreshIndicator(
-      color: colorScheme.primary,
-      backgroundColor: colorScheme.background,
-      onRefresh: () async => context.read<MusicAssistantProvider>().loadLibrary(),
-      child: LetterScrollbar(
-        controller: _artistsScrollController,
-        items: artistNames,
-        displayMode: _getScrollbarDisplayMode(_artistsSortOrder),
-        onDragStateChanged: _onLetterScrollbarDragChanged,
-        bottomPadding: BottomSpacing.withMiniPlayer,
-        child: _artistsViewMode == 'list'
-            ? ListView.builder(
-                controller: _artistsScrollController,
-                key: PageStorageKey<String>('library_artists_list_${_showFavoritesOnly ? 'fav' : 'all'}_$_artistsViewMode'),
-                cacheExtent: 1000,
-                addAutomaticKeepAlives: false,
-                addRepaintBoundaries: false,
-                itemExtent: 67,
-                itemCount: sortedArtists.length,
-                padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
-                itemBuilder: (context, index) {
-                  final artist = sortedArtists[index];
-                  return _buildArtistTile(
-                    context,
-                    artist,
-                    key: ValueKey(artist.uri ?? artist.itemId),
-                  );
-                },
-              )
-            : GridView.builder(
-                controller: _artistsScrollController,
-                key: PageStorageKey<String>('library_artists_grid_${_showFavoritesOnly ? 'fav' : 'all'}_$_artistsViewMode'),
-                cacheExtent: 1000,
-                addAutomaticKeepAlives: false,
-                addRepaintBoundaries: false,
-                padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: _artistsViewMode == 'grid3' ? 3 : 2,
-                  childAspectRatio: _artistsViewMode == 'grid3' ? 0.75 : 0.80,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: sortedArtists.length,
-                itemBuilder: (context, index) {
-                  final artist = sortedArtists[index];
-                  return _buildArtistGridCard(context, artist);
-                },
-              ),
-      ),
+      },
     );
   }
 
@@ -4209,118 +4223,120 @@ class _NewLibraryScreenState extends State<NewLibraryScreen>
 
   // ============ ALBUMS TAB ============
   Widget _buildAlbumsTab(BuildContext context, S l10n) {
-    // Use select to only rebuild when specific fields change
-    // SyncService changes are handled by _onSyncServiceChanged listener
-    final (isLoading, enabledProviders) = context.select<MusicAssistantProvider, (bool, Set<String>)>(
-      (p) => (p.isLoading, p.enabledProviderIds.toSet()),
-    );
     final colorScheme = Theme.of(context).colorScheme;
     final syncService = SyncService.instance;
 
-    // Show loading only if actually loading AND no cached data available
-    if (isLoading && syncService.cachedAlbums.isEmpty) {
-      return Center(child: CircularProgressIndicator(color: colorScheme.primary));
-    }
+    return Consumer<MusicAssistantProvider>(
+      builder: (context, maProvider, _) {
+        final isLoading = maProvider.isLoading;
+        final enabledProviders = maProvider.enabledProviderIds.toSet();
 
-    // Always use SyncService data - it has the complete library with source tracking
-    final filteredAlbums = enabledProviders.isNotEmpty
-        ? syncService.getAlbumsFilteredByProviders(enabledProviders)
-        : syncService.cachedAlbums;
+        // Show loading only if actually loading AND no cached data available
+        if (isLoading && syncService.cachedAlbums.isEmpty) {
+          return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+        }
 
-    // Filter by favorites if enabled
-    final albums = _showFavoritesOnly
-        ? filteredAlbums.where((a) => a.favorite == true).toList()
-        : filteredAlbums;
+        // Always use SyncService data - it has the complete library with source tracking
+        final filteredAlbums = enabledProviders.isNotEmpty
+            ? syncService.getAlbumsFilteredByProviders(enabledProviders)
+            : syncService.cachedAlbums;
 
-    if (albums.isEmpty) {
-      if (_showFavoritesOnly) {
-        return EmptyState.custom(
-          context: context,
-          icon: Icons.favorite_border,
-          title: l10n.noFavoriteAlbums,
-          subtitle: l10n.tapHeartAlbum,
-        );
-      }
-      return EmptyState.albums(
-        context: context,
-        onRefresh: () => context.read<MusicAssistantProvider>().loadLibrary(),
-      );
-    }
+        // Filter by favorites if enabled
+        final albums = _showFavoritesOnly
+            ? filteredAlbums.where((a) => a.favorite == true).toList()
+            : filteredAlbums;
 
-    // PERF: Use cached sorting - only re-sorts when data or sort order changes
-    final sortedAlbums = _getSortedAlbums(albums);
-    final albumNames = _cachedAlbumNames;
-    // Generate year labels for year sort mode
-    final albumYears = (_albumsSortOrder == 'year' || _albumsSortOrder == 'year_desc')
-        ? sortedAlbums.map((a) => a.year?.toString() ?? '?').toList()
-        : null;
+        if (albums.isEmpty) {
+          if (_showFavoritesOnly) {
+            return EmptyState.custom(
+              context: context,
+              icon: Icons.favorite_border,
+              title: l10n.noFavoriteAlbums,
+              subtitle: l10n.tapHeartAlbum,
+            );
+          }
+          return EmptyState.albums(
+            context: context,
+            onRefresh: () => maProvider.loadLibrary(),
+          );
+        }
 
-    return RefreshIndicator(
-      color: colorScheme.primary,
-      backgroundColor: colorScheme.background,
-      onRefresh: () async => context.read<MusicAssistantProvider>().loadLibrary(),
-      child: LetterScrollbar(
-        controller: _albumsScrollController,
-        items: albumNames,
-        displayMode: _getScrollbarDisplayMode(_albumsSortOrder),
-        displayLabels: albumYears,
-        onDragStateChanged: _onLetterScrollbarDragChanged,
-        bottomPadding: BottomSpacing.withMiniPlayer,
-        child: _albumsViewMode == 'list'
-            ? ListView.builder(
-                controller: _albumsScrollController,
-                key: PageStorageKey<String>('library_albums_list_${_showFavoritesOnly ? 'fav' : 'all'}_$_albumsViewMode'),
-                cacheExtent: 1000,
-                addAutomaticKeepAlives: false,
-                addRepaintBoundaries: false,
-                itemExtent: 67,
-                padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
-                itemCount: sortedAlbums.length,
-                itemBuilder: (context, index) {
-                  final album = sortedAlbums[index];
-                  return _buildAlbumListTile(context, album);
-                },
-              )
-            : GridView.builder(
-                controller: _albumsScrollController,
-                key: PageStorageKey<String>('library_albums_grid_${_showFavoritesOnly ? 'fav' : 'all'}_$_albumsViewMode'),
-                cacheExtent: 1000,
-                addAutomaticKeepAlives: false,
-                addRepaintBoundaries: false,
-                padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: _albumsViewMode == 'grid3' ? 3 : 2,
-                  childAspectRatio: _albumsViewMode == 'grid3' ? 0.70 : 0.75,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: sortedAlbums.length,
-                itemBuilder: (context, index) {
-                  final album = sortedAlbums[index];
-                  return GestureDetector(
-                    onLongPressStart: (details) {
-                      MediaContextMenu.show(
-                        context: context,
-                        position: details.globalPosition,
-                        mediaType: ContextMenuMediaType.album,
-                        item: album,
-                        isFavorite: album.favorite ?? false,
-                        isInLibrary: album.inLibrary,
-                        onToggleFavorite: () => _toggleAlbumFavorite(album),
-                        onToggleLibrary: () => _toggleAlbumLibrary(album),
+        // PERF: Use cached sorting - only re-sorts when data or sort order changes
+        final sortedAlbums = _getSortedAlbums(albums);
+        final albumNames = _cachedAlbumNames;
+        // Generate year labels for year sort mode
+        final albumYears = (_albumsSortOrder == 'year' || _albumsSortOrder == 'year_desc')
+            ? sortedAlbums.map((a) => a.year?.toString() ?? '?').toList()
+            : null;
+
+        return RefreshIndicator(
+          color: colorScheme.primary,
+          backgroundColor: colorScheme.background,
+          onRefresh: () async => maProvider.loadLibrary(),
+          child: LetterScrollbar(
+            controller: _albumsScrollController,
+            items: albumNames,
+            displayMode: _getScrollbarDisplayMode(_albumsSortOrder),
+            displayLabels: albumYears,
+            onDragStateChanged: _onLetterScrollbarDragChanged,
+            bottomPadding: BottomSpacing.withMiniPlayer,
+            child: _albumsViewMode == 'list'
+                ? ListView.builder(
+                    controller: _albumsScrollController,
+                    key: PageStorageKey<String>('library_albums_list_${_showFavoritesOnly ? 'fav' : 'all'}_$_albumsViewMode'),
+                    cacheExtent: 1000,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: false,
+                    itemExtent: 67,
+                    padding: EdgeInsets.only(left: 8, right: 8, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                    itemCount: sortedAlbums.length,
+                    itemBuilder: (context, index) {
+                      final album = sortedAlbums[index];
+                      return _buildAlbumListTile(context, album);
+                    },
+                  )
+                : GridView.builder(
+                    controller: _albumsScrollController,
+                    key: PageStorageKey<String>('library_albums_grid_${_showFavoritesOnly ? 'fav' : 'all'}_$_albumsViewMode'),
+                    cacheExtent: 1000,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: false,
+                    padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: BottomSpacing.withMiniPlayer),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: _albumsViewMode == 'grid3' ? 3 : 2,
+                      childAspectRatio: _albumsViewMode == 'grid3' ? 0.70 : 0.75,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: sortedAlbums.length,
+                    itemBuilder: (context, index) {
+                      final album = sortedAlbums[index];
+                      return GestureDetector(
+                        onLongPressStart: (details) {
+                          MediaContextMenu.show(
+                            context: context,
+                            position: details.globalPosition,
+                            mediaType: ContextMenuMediaType.album,
+                            item: album,
+                            isFavorite: album.favorite ?? false,
+                            isInLibrary: album.inLibrary,
+                            onToggleFavorite: () => _toggleAlbumFavorite(album),
+                            onToggleLibrary: () => _toggleAlbumLibrary(album),
+                          );
+                        },
+                        child: AlbumCard(
+                          key: ValueKey(album.uri ?? album.itemId),
+                          album: album,
+                          heroTagSuffix: 'library_grid',
+                          // Use 256 to match detail screen for smooth Hero animation
+                          imageCacheSize: 256,
+                        ),
                       );
                     },
-                    child: AlbumCard(
-                      key: ValueKey(album.uri ?? album.itemId),
-                      album: album,
-                      heroTagSuffix: 'library_grid',
-                      // Use 256 to match detail screen for smooth Hero animation
-                      imageCacheSize: 256,
-                    ),
-                  );
-                },
-              ),
-      ),
+                  ),
+          ),
+        );
+      },
     );
   }
 

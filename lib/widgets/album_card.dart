@@ -63,10 +63,10 @@ class _AlbumCardState extends State<AlbumCard> with LibraryStatusMixin {
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.album.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.album.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
     _initFallbackImage();
   }
@@ -410,22 +410,26 @@ class _AlbumCardState extends State<AlbumCard> with LibraryStatusMixin {
           const SizedBox(height: 8),
           // Album title with year
           // PERF: Removed Hero - text animations provide minimal benefit but add overhead
-          Text(
-            widget.album.nameWithYear,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.titleSmall?.copyWith(
-              color: colorScheme.onSurface,
-              fontWeight: FontWeight.w500,
+          Flexible(
+            child: Text(
+              widget.album.nameWithYear,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.titleSmall?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           // Artist name
-          Text(
-            widget.album.artistsString,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurface.withOpacity(0.7),
+          Flexible(
+            child: Text(
+              widget.album.artistsString,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurface.withOpacity(0.7),
+              ),
             ),
           ),
           ],

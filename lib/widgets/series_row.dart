@@ -179,7 +179,7 @@ class _SeriesRowState extends State<SeriesRow> with AutomaticKeepAliveClientMixi
       );
     }
 
-    const textAreaHeight = 44.0;
+    const textAreaHeight = 48.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize;
     final itemExtent = cardWidth + 12;

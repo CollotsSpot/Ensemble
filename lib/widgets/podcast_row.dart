@@ -114,8 +114,8 @@ class _PodcastRowState extends State<PodcastRow> with AutomaticKeepAliveClientMi
     }
 
     // Card layout: square artwork + text below (same as AlbumRow)
-    // Text area: 8px gap + ~18px title + ~18px author = ~44px
-    const textAreaHeight = 44.0;
+    // Text area: 8px gap + ~20px title + ~20px author = ~48px
+    const textAreaHeight = 48.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize; // Card width = artwork width (square)
     final itemExtent = cardWidth + 12; // width + horizontal margins

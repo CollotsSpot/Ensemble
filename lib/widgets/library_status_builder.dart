@@ -122,10 +122,11 @@ mixin LibraryStatusMixin<T extends StatefulWidget> on State<T> {
   }
 
   void _onLibraryStatusChanged() {
-    // Trigger rebuild to pick up new status values
-    if (mounted) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       setState(() {});
-    }
+    });
   }
 
   /// Set library status optimistically and return previous value for rollback

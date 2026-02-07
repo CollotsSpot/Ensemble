@@ -67,10 +67,10 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> with SingleTick
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.album.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.album.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
     _loadTracks();
     _loadAlbumDescription();

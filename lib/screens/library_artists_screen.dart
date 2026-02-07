@@ -8,12 +8,52 @@ import '../widgets/artist_avatar.dart';
 import 'artist_details_screen.dart';
 import '../l10n/app_localizations.dart';
 
-class LibraryArtistsScreen extends StatelessWidget {
+class LibraryArtistsScreen extends StatefulWidget {
   const LibraryArtistsScreen({super.key});
 
   @override
+  State<LibraryArtistsScreen> createState() => _LibraryArtistsScreenState();
+}
+
+class _LibraryArtistsScreenState extends State<LibraryArtistsScreen> {
+  List<Artist> _artists = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = context.read<MusicAssistantProvider>();
+    _artists = provider.artists;
+    _isLoading = provider.isLoading;
+    provider.addListener(_onProviderChanged);
+
+    // Auto-load library if empty
+    if (_artists.isEmpty && !_isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          provider.loadLibrary();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    context.read<MusicAssistantProvider>().removeListener(_onProviderChanged);
+    super.dispose();
+  }
+
+  void _onProviderChanged() {
+    if (!mounted) return;
+    final provider = context.read<MusicAssistantProvider>();
+    setState(() {
+      _artists = provider.artists;
+      _isLoading = provider.isLoading;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Use Selector for targeted rebuilds - only rebuild when artists or loading state changes
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -36,13 +76,7 @@ class LibraryArtistsScreen extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: Selector<MusicAssistantProvider, (List<Artist>, bool)>(
-        selector: (_, provider) => (provider.artists, provider.isLoading),
-        builder: (context, data, _) {
-          final (artists, isLoading) = data;
-          return _buildArtistsList(context, artists, isLoading);
-        },
-      ),
+      body: _buildArtistsList(context, _artists, _isLoading),
     );
   }
 

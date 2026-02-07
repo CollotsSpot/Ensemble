@@ -68,6 +68,9 @@ class PlayerRevealOverlayState extends State<PlayerRevealOverlay>
   // Hint system
   bool _showHints = true;
 
+  // Guard to run color preload only once from didChangeDependencies
+  bool _hasPreloaded = false;
+
   // PERF: Pre-cached static BoxShadow to avoid allocation per frame
   static const BoxShadow _cardShadow = BoxShadow(
     color: Color(0x33000000), // 20% black
@@ -98,9 +101,6 @@ class PlayerRevealOverlayState extends State<PlayerRevealOverlay>
       curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
     );
 
-    // Preload all player track info and extract colors
-    _preloadColorsForPlayers();
-
     // Start reveal animation
     _revealController.duration = const Duration(milliseconds: 200);
     _revealController.forward();
@@ -114,6 +114,15 @@ class PlayerRevealOverlayState extends State<PlayerRevealOverlay>
         _preloadColorsForPlayers();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasPreloaded) {
+      _hasPreloaded = true;
+      _preloadColorsForPlayers();
+    }
   }
 
   Future<void> _loadHintSettings() async {

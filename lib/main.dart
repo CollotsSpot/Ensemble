@@ -236,9 +236,9 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
     // Set the queue manager after creation (breaks circular dependency)
     _playerProvider.queueManager = queueManager;
 
-    // Initialize main provider (will act as facade)
-    // For now, don't pass providers - MusicAssistantProvider doesn't accept them yet
-    // It will delegate to the new providers gradually
+    // Initialize main provider (facade mode - sub-providers not yet wired)
+    // Sub-providers have null API at construction time and no update mechanism,
+    // so keep facade using its own internal logic until wiring is complete.
     _musicProvider = MusicAssistantProvider();
 
     // Wire up player provider callbacks

@@ -36,6 +36,9 @@ import '../utils/player_sort_utility.dart';
 import '../utils/queue_controls.dart';
 import '../utils/player_sync_state.dart';
 import '../main.dart' show audioHandler;
+import 'connection_provider.dart';
+import 'library_provider.dart';
+import 'player_provider.dart';
 
 /// Main provider that coordinates connection, player, and library state.
 ///
@@ -48,13 +51,19 @@ import '../main.dart' show audioHandler;
 /// - Player logic: Player selection, controls, local player
 /// - Library logic: Artists, albums, tracks, search
 class MusicAssistantProvider with ChangeNotifier {
+  // Sub-providers (injected for delegation)
+  final ConnectionProvider? _connectionProvider;
+  final LibraryProvider? _libraryProvider;
+  final PlayerProvider? _playerProvider;
+
   MusicAssistantAPI? _api;
   final AuthManager _authManager = AuthManager();
   final DebugLogger _logger = DebugLogger();
   final CacheService _cacheService = CacheService();
   final PositionTracker _positionTracker = PositionTracker();
 
-  MAConnectionState _connectionState = MAConnectionState.disconnected;
+  // Local state (used when _connectionProvider is null, for backward compatibility)
+  MAConnectionState? _connectionState;
   String? _serverUrl;
   String? _error;
 
@@ -183,13 +192,23 @@ class MusicAssistantProvider with ChangeNotifier {
   // GETTERS
   // ============================================================================
 
-  MAConnectionState get connectionState => _connectionState;
-  String? get serverUrl => _serverUrl;
-  String? get error => _error;
-  bool get isConnected => _connectionState == MAConnectionState.connected ||
-                          _connectionState == MAConnectionState.authenticated;
+  // Connection getters - use facade's own state (sub-providers not yet wired)
+  MAConnectionState get connectionState => _connectionState ?? MAConnectionState.disconnected;
 
-  // Library getters with provider filtering applied
+  String? get serverUrl => _serverUrl;
+
+  String? get error => _error;
+
+  bool get isConnected => _connectionState == MAConnectionState.connected;
+
+  MusicAssistantAPI? get api => _api;
+
+  List<String> get providerFilter => _providerFilter;
+
+  List<String> get playerFilter => _playerFilter;
+
+  // Library getters - delegate to LibraryProvider when available
+  // TEMP: Disable delegation to debug context.select error
   List<Artist> get artists => filterByProvider(_artists);
   List<Album> get albums => filterByProvider(_albums);
   List<Track> get tracks => filterByProvider(_tracks);
@@ -201,12 +220,11 @@ class MusicAssistantProvider with ChangeNotifier {
   List<Album> get albumsUnfiltered => _albums;
   List<MediaItem> get podcastsUnfiltered => _podcasts;
   List<MediaItem> get radioStationsUnfiltered => _radioStations;
+
+  // Library loading states - for now keep local state as LibraryProvider doesn't expose these
   bool get isLoading => _isLoading;
   bool get isLoadingRadio => _isLoadingRadio;
   bool get isLoadingPodcasts => _isLoadingPodcasts;
-
-  /// Provider filter from MA user settings (empty = all providers allowed)
-  List<String> get providerFilter => _providerFilter;
 
   /// Whether provider filtering is active
   bool get hasProviderFilter => _providerFilterService.hasProviderFilter;
@@ -229,9 +247,6 @@ class MusicAssistantProvider with ChangeNotifier {
   Map<String, List<MediaItem>> filterSearchResults(Map<String, List<MediaItem>> results) {
     return _providerFilterService.filterSearchResults(results);
   }
-
-  /// Player filter from MA user settings (empty = all players allowed)
-  List<String> get playerFilter => _playerFilter;
 
   /// Whether player filtering is active
   bool get hasPlayerFilter => _providerFilterService.hasPlayerFilter;
@@ -496,12 +511,7 @@ class MusicAssistantProvider with ChangeNotifier {
   SyncStatus get syncStatus => SyncService.instance.status;
 
   /// Selected player - loads from cache if not yet set
-  Player? get selectedPlayer {
-    if (_selectedPlayer == null && _cacheService.getCachedSelectedPlayer() != null) {
-      _selectedPlayer = _cacheService.getCachedSelectedPlayer();
-    }
-    return _selectedPlayer;
-  }
+  Player? get selectedPlayer => _selectedPlayer;
 
   /// Available players - loads from cache for instant UI display
   /// Filtered by player_filter if active
@@ -525,6 +535,8 @@ class MusicAssistantProvider with ChangeNotifier {
   }
 
   Track? get currentTrack => _currentTrack;
+  Audiobook? get currentAudiobook => _currentAudiobook;
+  Map<String, String> get castToSendspinIdMap => _castToSendspinIdMap;
 
   // Sleep timer getters
   bool get sleepTimerActive => _sleepTimerMinutes != null;
@@ -541,11 +553,8 @@ class MusicAssistantProvider with ChangeNotifier {
   /// Home refresh counter - increments when home rows should refresh their data
   int get homeRefreshCounter => _homeRefreshCounter;
 
-  /// Currently playing audiobook context (with chapters) - set when playing an audiobook
-  Audiobook? get currentAudiobook => _currentAudiobook;
-
   /// Whether we're currently playing an audiobook
-  bool get isPlayingAudiobook => _currentAudiobook != null;
+  bool get isPlayingAudiobook => currentAudiobook != null;
 
   /// Whether we're currently playing a podcast episode
   /// Detected by checking if the current track's URI contains podcast_episode
@@ -621,7 +630,6 @@ class MusicAssistantProvider with ChangeNotifier {
   String get lastSearchQuery => _lastSearchQuery;
   Map<String, List<MediaItem>> get lastSearchResults => _lastSearchResults;
 
-  MusicAssistantAPI? get api => _api;
   AuthManager get authManager => _authManager;
 
   /// Position tracker for playback progress - single source of truth
@@ -757,12 +765,25 @@ class MusicAssistantProvider with ChangeNotifier {
   // INITIALIZATION
   // ============================================================================
 
-  MusicAssistantProvider() {
+  MusicAssistantProvider({
+    ConnectionProvider? connectionProvider,
+    LibraryProvider? libraryProvider,
+    PlayerProvider? playerProvider,
+  })  : _connectionProvider = connectionProvider,
+      _libraryProvider = libraryProvider,
+      _playerProvider = playerProvider {
     _localPlayer = LocalPlayerService(_authManager);
     _initialize();
   }
 
   Future<void> _initialize() async {
+    // Set up ConnectionProvider callbacks before connecting
+    if (_connectionProvider != null) {
+      _connectionProvider!.onConnected = _onConnectionProviderConnected;
+      _connectionProvider!.onAuthenticated = _onConnectionProviderAuthenticated;
+      _connectionProvider!.onDisconnected = _onConnectionProviderDisconnected;
+    }
+
     _serverUrl = await SettingsService.getServerUrl();
 
     // Load cached players from database for instant display (before connecting)
@@ -992,10 +1013,88 @@ class MusicAssistantProvider with ChangeNotifier {
   }
 
   // ============================================================================
+  // CONNECTION PROVIDER CALLBACKS
+  // ============================================================================
+
+  /// Called by ConnectionProvider when WebSocket connects (before auth)
+  Future<void> _onConnectionProviderConnected() async {
+    _logger.log('🔗 ConnectionProvider: WebSocket connected');
+    // No-op for now - initialization happens after authentication
+  }
+
+  /// Called by ConnectionProvider when authentication succeeds
+  Future<void> _onConnectionProviderAuthenticated() async {
+    _logger.log('✅ ConnectionProvider: Authenticated');
+    await _initializeAfterConnection();
+  }
+
+  /// Called by ConnectionProvider when disconnected
+  void _onConnectionProviderDisconnected() {
+    _logger.log('📡 ConnectionProvider: Disconnected - keeping cached data');
+  }
+
+  /// Set up event subscriptions that are specific to the facade
+  void _setupEventSubscriptions() {
+    if (_api == null) return;
+
+    // Subscribe to player events
+    _localPlayerEventSubscription?.cancel();
+    _localPlayerEventSubscription = _api!.builtinPlayerEvents.listen(
+      _handleLocalPlayerEvent,
+      onError: (error) => _logger.log('Builtin player event stream error: $error'),
+    );
+
+    _playerUpdatedEventSubscription?.cancel();
+    _playerUpdatedEventSubscription = _api!.playerUpdatedEvents.listen(
+      _handlePlayerUpdatedEvent,
+      onError: (error) => _logger.log('Player updated event stream error: $error'),
+    );
+
+    _playerAddedEventSubscription?.cancel();
+    _playerAddedEventSubscription = _api!.playerAddedEvents.listen(
+      _handlePlayerAddedEvent,
+      onError: (error) => _logger.log('Player added event stream error: $error'),
+    );
+
+    _mediaItemAddedEventSubscription?.cancel();
+    _mediaItemAddedEventSubscription = _api!.mediaItemAddedEvents.listen(
+      _handleMediaItemAddedEvent,
+      onError: (error) => _logger.log('Media item added event stream error: $error'),
+    );
+
+    _mediaItemDeletedEventSubscription?.cancel();
+    _mediaItemDeletedEventSubscription = _api!.mediaItemDeletedEvents.listen(
+      _handleMediaItemDeletedEvent,
+      onError: (error) => _logger.log('Media item deleted event stream error: $error'),
+    );
+  }
+
+  // ============================================================================
   // CONNECTION
   // ============================================================================
 
   Future<void> connectToServer(String serverUrl) async {
+    if (_connectionProvider != null) {
+      // Delegate to ConnectionProvider
+      await _connectionProvider!.connect(serverUrl);
+
+      // After ConnectionProvider connects, get the API reference and initialize facade-specific stuff
+      _api = _connectionProvider!.api;
+      _imageHelper = ImageHelperService(
+        api: _api,
+        getCachedTrackForPlayer: (playerId) => _cacheService.getCachedTrackForPlayer(playerId),
+      );
+
+      // Set up facade-specific event subscriptions
+      _setupEventSubscriptions();
+    } else {
+      // Fallback to old behavior when ConnectionProvider is not available
+      await _connectToServerLegacy(serverUrl);
+    }
+  }
+
+  /// Legacy connection method (used when ConnectionProvider is not provided)
+  Future<void> _connectToServerLegacy(String serverUrl) async {
     try {
       _error = null;
       _serverUrl = serverUrl;
@@ -1054,36 +1153,8 @@ class MusicAssistantProvider with ChangeNotifier {
         },
       );
 
-      _localPlayerEventSubscription?.cancel();
-      _localPlayerEventSubscription = _api!.builtinPlayerEvents.listen(
-        _handleLocalPlayerEvent,
-        onError: (error) => _logger.log('Builtin player event stream error: $error'),
-      );
-
-      _playerUpdatedEventSubscription?.cancel();
-      _playerUpdatedEventSubscription = _api!.playerUpdatedEvents.listen(
-        _handlePlayerUpdatedEvent,
-        onError: (error) => _logger.log('Player updated event stream error: $error'),
-      );
-
-      _playerAddedEventSubscription?.cancel();
-      _playerAddedEventSubscription = _api!.playerAddedEvents.listen(
-        _handlePlayerAddedEvent,
-        onError: (error) => _logger.log('Player added event stream error: $error'),
-      );
-
-      // Subscribe to library change events for instant UI updates
-      _mediaItemAddedEventSubscription?.cancel();
-      _mediaItemAddedEventSubscription = _api!.mediaItemAddedEvents.listen(
-        _handleMediaItemAddedEvent,
-        onError: (error) => _logger.log('Media item added event stream error: $error'),
-      );
-
-      _mediaItemDeletedEventSubscription?.cancel();
-      _mediaItemDeletedEventSubscription = _api!.mediaItemDeletedEvents.listen(
-        _handleMediaItemDeletedEvent,
-        onError: (error) => _logger.log('Media item deleted event stream error: $error'),
-      );
+      // Set up event subscriptions using shared method
+      _setupEventSubscriptions();
 
       await _api!.connect();
       notifyListeners();
@@ -4906,6 +4977,18 @@ class MusicAssistantProvider with ChangeNotifier {
   // ============================================================================
 
   Future<void> loadLibrary() async {
+    if (_libraryProvider != null) {
+      // Delegate to LibraryProvider
+      await _libraryProvider!.loadLibrary();
+      notifyListeners();
+    } else {
+      // Fallback to legacy behavior
+      await _loadLibraryLegacy();
+    }
+  }
+
+  /// Legacy library loading method (used when LibraryProvider is not provided)
+  Future<void> _loadLibraryLegacy() async {
     if (!isConnected) return;
 
     try {

@@ -63,10 +63,10 @@ class _ArtistCardState extends State<ArtistCard> with LibraryStatusMixin {
     final service = LibraryStatusService.instance;
     final key = libraryItemKey;
     if (!service.isInLibrary(key) && widget.artist.inLibrary) {
-      service.setLibraryStatus(key, true);
+      service.initLibraryStatus(key, true);
     }
     if (!service.isFavorite(key) && (widget.artist.favorite ?? false)) {
-      service.setFavoriteStatus(key, true);
+      service.initFavoriteStatus(key, true);
     }
     // Fetch fallback image once in initState, not during build
     _initFallbackImage();

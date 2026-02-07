@@ -114,8 +114,8 @@ class _DiscoveryRowState extends State<DiscoveryRow> with AutomaticKeepAliveClie
     }
 
     // Card layout: square artwork + text below
-    // Text area: 8px gap + ~18px title + ~18px subtitle = ~44px
-    const textAreaHeight = 44.0;
+    // Text area: 8px gap + ~20px title + ~20px subtitle = ~48px
+    const textAreaHeight = 48.0;
     final artworkSize = contentHeight - textAreaHeight;
     final cardWidth = artworkSize; // Card width = artwork width (square)
     final itemExtent = cardWidth + 12; // width + horizontal margins
@@ -191,13 +191,15 @@ class _DiscoveryRowState extends State<DiscoveryRow> with AutomaticKeepAliveClie
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            item.name,
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurface,
+          Flexible(
+            child: Text(
+              item.name,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurface,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
