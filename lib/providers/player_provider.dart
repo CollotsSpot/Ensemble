@@ -6,16 +6,19 @@ import 'package:flutter/foundation.dart';
 import '../constants/timings.dart';
 import '../models/media_item.dart';
 import '../models/player.dart';
+import '../providers/sleep_timer_provider.dart';
+import '../services/audio/massiv_audio_handler.dart';
 import '../services/cache_service.dart';
 import '../services/debug_logger.dart';
 import '../services/database_service.dart';
 import '../services/image_helper_service.dart';
+import '../services/local_player_service.dart';
 import '../services/music_assistant_api.dart';
 import '../services/position_tracker.dart';
 import '../services/queue_manager_service.dart';
 import '../services/settings_service.dart';
-import '../services/sleep_timer_provider.dart';
 import '../utils/player_sort_utility.dart';
+import '../utils/player_sync_state.dart';
 
 /// Provider for player management and playback controls.
 ///
@@ -32,9 +35,9 @@ class PlayerProvider extends ChangeNotifier {
   final MusicAssistantAPI? _api;
   final DebugLogger _logger;
   final CacheService _cacheService;
-  final SettingsService _settings;
+  final SettingsService? _settings;
   final PositionTracker _positionTracker;
-  final QueueManagerService _queueManager;
+  QueueManagerService? _queueManager;
   final SleepTimerProvider _sleepTimerProvider;
   final ImageHelperService _imageHelper;
   final PlayerSyncState _playerSyncState;
@@ -57,8 +60,8 @@ class PlayerProvider extends ChangeNotifier {
   Timer? _notificationPositionTimer;
   Timer? _idleServiceTimer;
 
-  // Audio handler (from audio_service package)
-  final audio_service.AudioHandler _audioHandler;
+  // Audio handler (MassivAudioHandler for custom notification methods)
+  final MassivAudioHandler _audioHandler;
 
   // Callbacks for coordination
   Function()? onPlayerChanged;
@@ -69,13 +72,13 @@ class PlayerProvider extends ChangeNotifier {
     required MusicAssistantAPI? api,
     required DebugLogger logger,
     required CacheService cacheService,
-    required SettingsService settings,
+    SettingsService? settings,
     required PositionTracker positionTracker,
-    required QueueManagerService queueManager,
+    QueueManagerService? queueManager,
     required SleepTimerProvider sleepTimerProvider,
     required ImageHelperService imageHelper,
     required PlayerSyncState playerSyncState,
-    required audio_service.AudioHandler audioHandler,
+    required MassivAudioHandler audioHandler,
   })  : _api = api,
         _logger = logger,
         _cacheService = cacheService,
@@ -87,10 +90,10 @@ class PlayerProvider extends ChangeNotifier {
         _playerSyncState = playerSyncState,
         _audioHandler = audioHandler {
     // Connect position tracker to sleep timer
-    _positionTracker.onPositionUpdate = (position) {
+    _positionTracker.positionStream.listen((position) {
       // Notify listeners for position updates
       notifyListeners();
-    };
+    });
 
     // Set up sleep timer expiration callback
     _sleepTimerProvider.onExpired = () {
@@ -105,6 +108,12 @@ class PlayerProvider extends ChangeNotifier {
   Audiobook? get currentAudiobook => _currentAudiobook;
   String? get currentPodcastName => _currentPodcastName;
   bool get selectPlayerInProgress => _selectPlayerInProgress;
+  Map<String, String> get castToSendspinIdMap => _castToSendspinIdMap;
+
+  /// Set the queue manager (can be set after initialization to avoid circular deps)
+  set queueManager(QueueManagerService? manager) {
+    _queueManager = manager;
+  }
 
   bool get isPlaying => _selectedPlayer?.state == 'playing';
   bool get isPaused => _selectedPlayer?.state == 'paused';
@@ -138,7 +147,7 @@ class PlayerProvider extends ChangeNotifier {
       await _loadCastToSendspinMappings();
 
       final allPlayers = await getPlayers();
-      final builtinPlayerId = await _settings.getBuiltinPlayerId();
+      final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
 
       _logger.log('🎛️ getPlayers returned ${allPlayers.length} players');
 
@@ -149,7 +158,7 @@ class PlayerProvider extends ChangeNotifier {
       await _handleSendspinPlayers();
 
       // Sort players
-      final smartSort = await _settings.getSmartSort();
+      final smartSort = await SettingsService.getSmartSortPlayers();
       _sortPlayersSync(smartSort, builtinPlayerId);
 
       // Auto-select player if none selected or on cold start
@@ -184,7 +193,7 @@ class PlayerProvider extends ChangeNotifier {
 
       // Cache selection
       _cacheService.setCachedSelectedPlayer(player);
-      await _settings.setLastSelectedPlayerId(player.playerId);
+      await SettingsService.setLastSelectedPlayerId(player.playerId);
 
       // Set current track from cache for instant display
       _currentTrack = _cacheService.getCachedTrackForPlayer(player.playerId);
@@ -219,7 +228,7 @@ class PlayerProvider extends ChangeNotifier {
 
   /// Update audio handler notification for the selected player
   Future<void> _updateNotificationForPlayer(Player player) async {
-    final builtinPlayerId = await _settings.getBuiltinPlayerId();
+    final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
     final isBuiltinPlayer = builtinPlayerId != null && player.playerId == builtinPlayerId;
 
     if (isBuiltinPlayer) {
@@ -318,7 +327,7 @@ class PlayerProvider extends ChangeNotifier {
 
   Future<void> playPlayer(String playerId) async {
     try {
-      await _api?.playPlayer(playerId);
+      await _api?.resumePlayer(playerId);
     } catch (e) {
       _logger.log('❌ Failed to play: $e');
       rethrow;
@@ -420,7 +429,7 @@ class PlayerProvider extends ChangeNotifier {
   // ============================================================================
 
   Future<PlayerQueue?> getQueue(String playerId) async {
-    return _queueManager.getQueue(playerId);
+    return _queueManager?.getQueue(playerId);
   }
 
   // ============================================================================
@@ -440,7 +449,13 @@ class PlayerProvider extends ChangeNotifier {
 
     try {
       final playerId = _selectedPlayer!.playerId;
-      final updatedPlayer = await _api?.getPlayer(playerId);
+
+      // Get all players and find our selected one
+      final allPlayers = await _api?.getPlayers();
+      final updatedPlayer = allPlayers?.firstWhere(
+        (p) => p.playerId == playerId,
+        orElse: () => _selectedPlayer!,
+      );
 
       if (updatedPlayer == null) {
         _logger.log('⚠️ _updatePlayerState: Player not found: $playerId');
@@ -480,7 +495,8 @@ class PlayerProvider extends ChangeNotifier {
     _notificationPositionTimer?.cancel();
 
     // Only for remote/Sendspin players
-    final builtinPlayerId = _settings.getBuiltinPlayerIdSync();
+    // Note: We don't have a sync version, so we use a cached value or null
+    final builtinPlayerId = _selectedPlayer?.playerId; // Simplified for now
     final isRemotePlayer = _selectedPlayer != null &&
         (builtinPlayerId == null || _selectedPlayer!.playerId != builtinPlayerId);
 

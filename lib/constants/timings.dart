@@ -8,6 +8,9 @@ class Timings {
   /// Player state polling interval (for selected player updates)
   static const Duration playerPollingInterval = Duration(seconds: 5);
 
+  /// Notification position update interval (for updating playback position in notification)
+  static const Duration notificationPositionUpdate = Duration(seconds: 1);
+
   /// Local player state report interval
   /// Note: Sendspin protocol only requires state on changes, not periodic reports.
   /// This is mainly for local UI position tracking. Set to 5s to reduce server traffic.

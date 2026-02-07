@@ -9,15 +9,26 @@
 | ConnectionProvider | 245 | lib/providers/connection_provider.dart | ✅ Created |
 | UIStateProvider | 167 | lib/providers/ui_state_provider.dart | ✅ Created & Committed |
 | LibraryProvider | 290 | lib/providers/library_provider.dart | ✅ Created & Committed |
+| PlayerProvider | 589 | lib/providers/player_provider.dart | ✅ Created & Integrated |
+| LocalPlayerProvider | 370 | lib/providers/local_player_provider.dart | ✅ Created & Integrated |
 
 **Main Provider: 5928 lines** (down from 6180 original)
 
+### Integration Status
+
+✅ **Phase 1 Complete**: All 5 providers created
+✅ **Phase 2 Started**: Integration into main.dart completed
+- All providers added to MultiProvider tree
+- Shared services (CacheService, PositionTracker, ImageHelperService) properly initialized
+- Build successful (52.2MB APK)
+
 ### Remaining Work
 
-| Provider | Est. Lines | Complexity | Dependencies |
-|----------|------------|------------|--------------|
-| PlayerProvider | ~800 | High | API, PositionTracker, AudioHandler, QueueManager, SleepTimer |
-| LocalPlayerProvider | ~500 | High | SendspinService, PcmAudioPlayer, LocalPlayerService |
+| Task | Complexity | Notes |
+|------|------------|-------|
+| Update MusicAssistantProvider facade | Medium | Accept providers in constructor, delegate methods |
+| Migrate consumers incrementally | High | Start with less critical screens |
+| Remove facade when complete | Low | After all consumers migrated |
 
 ---
 

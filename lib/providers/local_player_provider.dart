@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:audio_service/audio_service.dart' as audio_service;
 import 'package:flutter/foundation.dart';
 import '../constants/timings.dart';
+import '../services/audio/massiv_audio_handler.dart';
 import '../services/auth/auth_manager.dart';
 import '../services/debug_logger.dart';
 import '../services/device_id_service.dart';
@@ -26,7 +27,7 @@ import '../services/settings_service.dart';
 class LocalPlayerProvider extends ChangeNotifier {
   final AuthManager _authManager;
   final DebugLogger _logger;
-  final SettingsService _settings;
+  final SettingsService? _settings;
 
   // Local player service
   late final LocalPlayerService _localPlayer;
@@ -47,7 +48,7 @@ class LocalPlayerProvider extends ChangeNotifier {
   Timer? _localPlayerStateReportTimer;
 
   // Audio handler (from audio_service package)
-  final audio_service.AudioHandler _audioHandler;
+  final MassivAudioHandler _audioHandler;
 
   // Server info
   String? _serverUrl;
@@ -61,10 +62,10 @@ class LocalPlayerProvider extends ChangeNotifier {
     AuthManager? authManager,
     DebugLogger? logger,
     SettingsService? settings,
-    required audio_service.AudioHandler audioHandler,
+    required MassivAudioHandler audioHandler,
   })  : _authManager = authManager ?? AuthManager(),
         _logger = logger ?? DebugLogger(),
-        _settings = settings ?? SettingsService.instance,
+        _settings = settings,
         _audioHandler = audioHandler {
     _localPlayer = LocalPlayerService(_authManager);
   }
@@ -102,8 +103,8 @@ class LocalPlayerProvider extends ChangeNotifier {
     }
 
     try {
-      final deviceId = await DeviceIdService.getDeviceId();
-      final ownerName = await _settings.getOwnerName() ?? 'Ensemble User';
+      final deviceId = await DeviceIdService.getOrCreateDevicePlayerId();
+      final ownerName = await SettingsService.getOwnerName() ?? 'Ensemble User';
 
       _logger.log('📱 Registering local player: $deviceId');
 
@@ -199,8 +200,8 @@ class LocalPlayerProvider extends ChangeNotifier {
     _sendspinService!.onStreamEnd = _handleSendspinStreamEnd;
   }
 
-  void _handleSendspinPlay() {
-    _logger.log('📡 Sendspin: Play');
+  void _handleSendspinPlay(String streamUrl, Map<String, dynamic> trackInfo) {
+    _logger.log('📡 Sendspin: Play $streamUrl');
     _pcmAudioPlayer?.play();
     notifyListeners();
   }
@@ -219,7 +220,7 @@ class LocalPlayerProvider extends ChangeNotifier {
 
   void _handleSendspinSeek(int positionSeconds) {
     _logger.log('📡 Sendspin: Seek to $positionSeconds');
-    _pcmAudioPlayer?.seek(Duration(seconds: positionSeconds));
+    _pcmAudioPlayer?.resetPosition();
     notifyListeners();
   }
 
@@ -229,7 +230,7 @@ class LocalPlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _handleSendspinStreamStart() {
+  void _handleSendspinStreamStart(Map<String, dynamic>? trackInfo) {
     _logger.log('📡 Sendspin: Stream start');
     _pcmAudioPlayer?.play();
     notifyListeners();

@@ -6,14 +6,25 @@ import 'package:provider/provider.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
+import 'providers/connection_provider.dart';
+import 'providers/library_provider.dart';
 import 'providers/locale_provider.dart';
+import 'providers/local_player_provider.dart';
 import 'providers/music_assistant_provider.dart';
 import 'providers/navigation_provider.dart';
+import 'providers/player_provider.dart';
+import 'providers/sleep_timer_provider.dart';
+import 'providers/ui_state_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'services/cache_service.dart';
 import 'services/settings_service.dart';
 import 'services/database_service.dart';
+import 'services/image_helper_service.dart';
+import 'services/position_tracker.dart';
+import 'services/queue_manager_service.dart';
 import 'services/profile_service.dart';
+import 'services/provider_filter_service.dart';
 import 'services/sync_service.dart';
 import 'services/audio/massiv_audio_handler.dart';
 import 'services/auth/auth_manager.dart';
@@ -23,6 +34,7 @@ import 'services/music_assistant_api.dart' show MAConnectionState;
 import 'theme/theme_provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/system_theme_helper.dart';
+import 'utils/player_sync_state.dart';
 import 'widgets/global_player_overlay.dart';
 
 // Global audio handler instance
@@ -125,6 +137,21 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
   late MusicAssistantProvider _musicProvider;
   late ThemeProvider _themeProvider;
   late LocaleProvider _localeProvider;
+
+  // New multi-provider architecture
+  late ConnectionProvider _connectionProvider;
+  late UIStateProvider _uiStateProvider;
+  late LibraryProvider _libraryProvider;
+  late PlayerProvider _playerProvider;
+  late LocalPlayerProvider _localPlayerProvider;
+  late SleepTimerProvider _sleepTimerProvider;
+  late NavigationProvider _navigationProvider;
+
+  // Shared services
+  late final CacheService _cacheService = CacheService();
+  late final PositionTracker _positionTracker = PositionTracker();
+  late ImageHelperService _imageHelper;
+
   final _hardwareVolumeService = HardwareVolumeService();
   StreamSubscription? _volumeUpSub;
   StreamSubscription? _volumeDownSub;
@@ -137,9 +164,91 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
   @override
   void initState() {
     super.initState();
-    _musicProvider = MusicAssistantProvider();
     _themeProvider = ThemeProvider();
     _localeProvider = LocaleProvider();
+    _navigationProvider = NavigationProvider();
+    _sleepTimerProvider = SleepTimerProvider();
+
+    // Initialize connection provider first (others depend on it)
+    _connectionProvider = ConnectionProvider();
+    _uiStateProvider = UIStateProvider();
+
+    // Initialize shared image helper service
+    _imageHelper = ImageHelperService(
+      api: _connectionProvider.api,
+      getCachedTrackForPlayer: (playerId) => _cacheService.getCachedTrackForPlayer(playerId),
+    );
+
+    // Initialize library provider (needs API from connection)
+    _libraryProvider = LibraryProvider(
+      api: _connectionProvider.api,
+      logger: DebugLogger(),
+      cacheService: _cacheService,
+      settings: null, // Will use static methods
+      providerFilterService: ProviderFilterService(
+        providerFilter: _connectionProvider.providerFilter,
+        playerFilter: _connectionProvider.playerFilter,
+        availableMusicProviders: [],
+        artists: [],
+        albums: [],
+        tracks: [],
+        podcasts: [],
+        radioStations: [],
+      ),
+    );
+
+    // Initialize local player provider
+    _localPlayerProvider = LocalPlayerProvider(
+      audioHandler: audioHandler,
+      settings: null, // Will use static methods
+    );
+
+    // Initialize player provider (depends on several others)
+    // Note: queueManager will be set later to avoid circular dependency
+    _playerProvider = PlayerProvider(
+      api: _connectionProvider.api,
+      logger: DebugLogger(),
+      cacheService: _cacheService,
+      settings: null, // Will use static methods
+      positionTracker: _positionTracker,
+      queueManager: null, // Will be set after initialization
+      sleepTimerProvider: _sleepTimerProvider,
+      imageHelper: _imageHelper,
+      playerSyncState: PlayerSyncState(
+        availablePlayers: [],
+        castToSendspinIdMap: {},
+      ),
+      audioHandler: audioHandler,
+    );
+
+    // Create queue manager with functions that access provider state
+    final queueManager = QueueManagerService(
+      api: _connectionProvider.api,
+      database: DatabaseService.instance,
+      logger: DebugLogger(),
+      getAvailablePlayers: () => _playerProvider.availablePlayers,
+      getCastToSendspinMap: () => _playerProvider.castToSendspinIdMap,
+      playTracks: (playerId, tracks, {int? startIndex, bool? clearQueue}) async {
+        await _connectionProvider.api?.playTracks(playerId, tracks, startIndex: startIndex, clearQueue: clearQueue ?? true);
+      },
+    );
+
+    // Set the queue manager after creation (breaks circular dependency)
+    _playerProvider.queueManager = queueManager;
+
+    // Initialize main provider (will act as facade)
+    // For now, don't pass providers - MusicAssistantProvider doesn't accept them yet
+    // It will delegate to the new providers gradually
+    _musicProvider = MusicAssistantProvider();
+
+    // Wire up player provider callbacks
+    _playerProvider.onPlayerChanged = () {
+      setState(() {}); // Trigger rebuild on player change
+    };
+    _playerProvider.onTrackChanged = () {
+      setState(() {}); // Trigger rebuild on track change
+    };
+
     WidgetsBinding.instance.addObserver(this);
     _initHardwareVolumeControl();
     // Listen to player selection changes to toggle volume interception
@@ -252,9 +361,21 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // Core facade provider (will be removed after migration)
         ChangeNotifierProvider.value(value: _musicProvider),
+
+        // Theme providers
         ChangeNotifierProvider.value(value: _themeProvider),
         ChangeNotifierProvider.value(value: _localeProvider),
+        ChangeNotifierProvider.value(value: _navigationProvider),
+
+        // New multi-provider architecture (available for gradual migration)
+        ChangeNotifierProvider.value(value: _connectionProvider),
+        ChangeNotifierProvider.value(value: _uiStateProvider),
+        ChangeNotifierProvider.value(value: _libraryProvider),
+        ChangeNotifierProvider.value(value: _playerProvider),
+        ChangeNotifierProvider.value(value: _localPlayerProvider),
+        ChangeNotifierProvider.value(value: _sleepTimerProvider),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (context, themeProvider, localeProvider, _) {
@@ -450,94 +571,120 @@ class _AppStartupState extends State<AppStartup> {
   @override
   void initState() {
     super.initState();
-    _loadSettingsFirst();
+    try {
+      _loadSettingsFirst();
+    } catch (e) {
+      _logger.error('AppStartup init error: $e');
+      // Fallback - mark as loaded so app can continue
+      if (mounted) {
+        setState(() {
+          _settingsLoaded = true;
+          _hasCompletedOnboarding = true;
+        });
+      }
+    }
   }
 
   /// Load settings BEFORE checking connection.
   /// This ensures we know if this is a first-time user before transitioning.
   Future<void> _loadSettingsFirst() async {
-    // Load onboarding state first - this is critical for determining
-    // when to transition to HomeScreen
-    _hasCompletedOnboarding = await SettingsService.getHasCompletedOnboarding();
+    try {
+      // Load onboarding state first - this is critical for determining
+      // when to transition to HomeScreen
+      _hasCompletedOnboarding = await SettingsService.getHasCompletedOnboarding();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _settingsLoaded = true;
-    });
+      setState(() {
+        _settingsLoaded = true;
+      });
 
-    _logger.log('🚀 AppStartup: Settings loaded, hasCompletedOnboarding=$_hasCompletedOnboarding');
+      _logger.log('🚀 AppStartup: Settings loaded, hasCompletedOnboarding=$_hasCompletedOnboarding');
+    } catch (e) {
+      _logger.error('AppStartup settings load error: $e');
+      if (mounted) {
+        setState(() {
+          _settingsLoaded = true;
+          _hasCompletedOnboarding = true; // Default to true on error
+        });
+      }
+    }
 
     // Now check connection
     _checkAndConnect();
   }
 
   Future<void> _checkAndConnect() async {
-    final serverUrl = await SettingsService.getServerUrl();
+    try {
+      final serverUrl = await SettingsService.getServerUrl();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _savedServerUrl = serverUrl;
-    });
-
-    // If we have a saved server URL, attempt auto-connection
-    if (serverUrl != null && serverUrl.isNotEmpty) {
       setState(() {
-        _isConnecting = true;
+        _savedServerUrl = serverUrl;
       });
 
-      final provider = context.read<MusicAssistantProvider>();
+      // If we have a saved server URL, attempt auto-connection
+      if (serverUrl != null && serverUrl.isNotEmpty) {
+        setState(() {
+          _isConnecting = true;
+        });
 
-      // Connection is handled by MusicAssistantProvider._initialize()
-      // Just wait for it to complete or timeout
-      _logger.log('🚀 AppStartup: Waiting for provider auto-connection to $serverUrl');
+        final provider = context.read<MusicAssistantProvider>();
 
-      // For first-time users, we need to wait for both connection AND player selection
-      // so the welcome overlay can appear immediately without home screen flash.
-      // For returning users, just wait for connection.
-      final needsWelcome = !_hasCompletedOnboarding;
+        // Connection is handled by MusicAssistantProvider._initialize()
+        // Just wait for it to complete or timeout
+        _logger.log('🚀 AppStartup: Waiting for provider auto-connection to $serverUrl');
 
-      // Give the provider time to connect (it restores credentials and connects in _initialize)
-      // Check connection state periodically
-      for (var i = 0; i < 20; i++) {
-        await Future.delayed(const Duration(milliseconds: 250));
+        // For first-time users, we need to wait for both connection AND player selection
+        // so the welcome overlay can appear immediately without home screen flash.
+        // For returning users, just wait for connection.
+        final needsWelcome = !_hasCompletedOnboarding;
 
-        if (needsWelcome) {
-          // First-time user: wait for connection + player selection
-          if (provider.isConnected && provider.selectedPlayer != null) {
-            _logger.log('🚀 AppStartup: First-time user ready (connected + player selected)');
-            break;
+        // Give the provider time to connect (it restores credentials and connects in _initialize)
+        // Check connection state periodically
+        for (var i = 0; i < 20; i++) {
+          await Future.delayed(const Duration(milliseconds: 250));
+
+          if (needsWelcome) {
+            // First-time user: wait for connection + player selection
+            if (provider.isConnected && provider.selectedPlayer != null) {
+              _logger.log('🚀 AppStartup: First-time user ready (connected + player selected)');
+              break;
+            }
+          } else {
+            // Returning user: just wait for connection
+            if (provider.isConnected) {
+              _logger.log('🚀 AppStartup: Connection established');
+              break;
+            }
           }
-        } else {
-          // Returning user: just wait for connection
-          if (provider.isConnected) {
-            _logger.log('🚀 AppStartup: Connection established');
+
+          if (provider.connectionState == MAConnectionState.error) {
+            _logger.log('🚀 AppStartup: Connection failed with error');
             break;
           }
         }
 
-        if (provider.connectionState == MAConnectionState.error) {
-          _logger.log('🚀 AppStartup: Connection failed with error');
-          break;
+        if (!provider.isConnected) {
+          _logger.log('🚀 AppStartup: Connection still pending or failed');
+        }
+
+        if (mounted) {
+          setState(() {
+            _isConnecting = false;
+          });
         }
       }
-
-      if (!provider.isConnected) {
-        _logger.log('🚀 AppStartup: Connection still pending or failed');
-      }
-
+    } catch (e) {
+      _logger.error('AppStartup connection error: $e');
       if (mounted) {
         setState(() {
           _isConnecting = false;
-          _connectionAttempted = true;
         });
       }
-    } else {
-      setState(() {
-        _connectionAttempted = true;
-      });
     }
+    _connectionAttempted = true;
   }
 
   @override

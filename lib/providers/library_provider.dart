@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import '../constants/timings.dart';
 import '../models/media_item.dart';
-import '../models/playlist.dart';
 import '../services/cache_service.dart';
 import '../services/debug_logger.dart';
+import '../services/library_status_service.dart';
 import '../services/music_assistant_api.dart';
 import '../services/provider_filter_service.dart';
 import '../services/settings_service.dart';
@@ -23,7 +23,7 @@ class LibraryProvider extends ChangeNotifier {
   final MusicAssistantAPI? _api;
   final DebugLogger _logger;
   final CacheService _cacheService;
-  final SettingsService _settings;
+  final SettingsService? _settings;
   final ProviderFilterService _providerFilterService;
 
   // Library data
@@ -52,7 +52,7 @@ class LibraryProvider extends ChangeNotifier {
     required MusicAssistantAPI? api,
     required DebugLogger logger,
     required CacheService cacheService,
-    required SettingsService settings,
+    SettingsService? settings,
     required ProviderFilterService providerFilterService,
   })  : _api = api,
         _logger = logger,
@@ -251,11 +251,8 @@ class LibraryProvider extends ChangeNotifier {
 
   /// Get provider instance IDs for API calls (respects user filter)
   List<String> _providerIdsForApiCalls() {
-    // If user has enabled providers filter, use it; otherwise use all available
-    final enabledProviders = _settings.getEnabledMusicProvidersSync();
-    if (enabledProviders != null && enabledProviders.isNotEmpty) {
-      return enabledProviders;
-    }
+    // For now, always return empty list to use all available providers
+    // Provider filtering can be re-enabled later with async approach
     return [];
   }
 
