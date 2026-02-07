@@ -20,7 +20,6 @@ import '../services/cache_service.dart';
 import '../services/recently_played_service.dart';
 import '../services/sync_service.dart';
 import '../services/local_player_service.dart';
-import '../services/metadata_service.dart';
 import '../services/position_tracker.dart';
 import '../services/sendspin_service.dart';
 import '../services/pcm_audio_player.dart';
@@ -28,6 +27,8 @@ import '../services/offline_action_queue.dart';
 import '../constants/timings.dart';
 import '../services/database_service.dart';
 import '../services/library_status_service.dart';
+import '../services/image_helper_service.dart';
+import '../services/provider_filter_service.dart';
 import '../main.dart' show audioHandler;
 
 /// Main provider that coordinates connection, player, and library state.
@@ -111,6 +112,21 @@ class MusicAssistantProvider with ChangeNotifier {
   // PCM audio player for raw Sendspin audio streaming
   PcmAudioPlayer? _pcmAudioPlayer;
 
+  // Image helper service for artwork URL generation
+  ImageHelperService? _imageHelper;
+
+  // Provider filter service (created on demand)
+  ProviderFilterService get _providerFilterService => ProviderFilterService(
+    providerFilter: _providerFilter,
+    playerFilter: _playerFilter,
+    availableMusicProviders: _availableMusicProviders,
+    artists: _artists,
+    albums: _albums,
+    tracks: _tracks,
+    podcasts: _podcasts,
+    radioStations: _radioStations,
+  );
+
   // Search state persistence
   String _lastSearchQuery = '';
   Map<String, List<MediaItem>> _lastSearchResults = {
@@ -118,10 +134,6 @@ class MusicAssistantProvider with ChangeNotifier {
     'albums': [],
     'tracks': [],
   };
-
-  // Podcast cover cache: podcastId -> best available cover URL
-  // This is populated with episode covers when podcast covers are low-res
-  final Map<String, String> _podcastCoverCache = {};
 
   // Provider filter: list of allowed provider instance IDs from MA user settings
   // Empty list means all providers are allowed
@@ -168,7 +180,7 @@ class MusicAssistantProvider with ChangeNotifier {
   List<String> get providerFilter => _providerFilter;
 
   /// Whether provider filtering is active
-  bool get hasProviderFilter => _providerFilter.isNotEmpty;
+  bool get hasProviderFilter => _providerFilterService.hasProviderFilter;
 
   /// Check if a media item should be visible based on provider filter
   /// Returns true if:
@@ -176,58 +188,33 @@ class MusicAssistantProvider with ChangeNotifier {
   /// - The item has at least one provider mapping in the allowed list
   /// - The item's primary provider is in the allowed list
   bool isItemAllowedByProviderFilter(MediaItem item) {
-    // No filter = show everything
-    if (_providerFilter.isEmpty) return true;
-
-    // Check if item's provider mappings include any allowed provider
-    final mappings = item.providerMappings;
-    if (mappings != null && mappings.isNotEmpty) {
-      for (final mapping in mappings) {
-        if (_providerFilter.contains(mapping.providerInstance)) {
-          return true;
-        }
-      }
-    }
-
-    // Also check primary provider field (for items without full mappings)
-    if (_providerFilter.contains(item.provider)) {
-      return true;
-    }
-
-    return false;
+    return _providerFilterService.isItemAllowedByProviderFilter(item);
   }
 
   /// Filter a list of media items based on provider filter
   List<T> filterByProvider<T extends MediaItem>(List<T> items) {
-    if (_providerFilter.isEmpty) return items;
-    return items.where(isItemAllowedByProviderFilter).toList();
+    return _providerFilterService.filterByProvider(items);
   }
 
   /// Filter search results map based on provider filter
   Map<String, List<MediaItem>> filterSearchResults(Map<String, List<MediaItem>> results) {
-    if (_providerFilter.isEmpty) return results;
-    return {
-      for (final entry in results.entries)
-        entry.key: entry.value.where(isItemAllowedByProviderFilter).toList(),
-    };
+    return _providerFilterService.filterSearchResults(results);
   }
 
   /// Player filter from MA user settings (empty = all players allowed)
   List<String> get playerFilter => _playerFilter;
 
   /// Whether player filtering is active
-  bool get hasPlayerFilter => _playerFilter.isNotEmpty;
+  bool get hasPlayerFilter => _providerFilterService.hasPlayerFilter;
 
   /// Check if a player should be visible based on player filter
   bool isPlayerAllowedByFilter(Player player) {
-    if (_playerFilter.isEmpty) return true;
-    return _playerFilter.contains(player.playerId);
+    return _providerFilterService.isPlayerAllowedByFilter(player);
   }
 
   /// Filter a list of players based on player filter
   List<Player> filterPlayers(List<Player> players) {
-    if (_playerFilter.isEmpty) return players;
-    return players.where(isPlayerAllowedByFilter).toList();
+    return _providerFilterService.filterPlayers(players);
   }
 
   // ============================================================================
@@ -244,12 +231,12 @@ class MusicAssistantProvider with ChangeNotifier {
   /// Get SVG icon for a provider domain
   /// Returns null if no icon is available
   String? getProviderIconSvg(String domain, {bool isDark = false}) {
-    return _api?.getProviderIconSvg(domain, isDark: isDark);
+    return _imageHelper?.getProviderIconSvg(domain, isDark: isDark);
   }
 
   /// Get provider manifest by domain
   ProviderManifest? getProviderManifest(String domain) {
-    return _api?.getProviderManifest(domain);
+    return _imageHelper?.getProviderManifest(domain);
   }
 
   /// List of enabled provider instance IDs (empty = all enabled)
@@ -777,9 +764,7 @@ class MusicAssistantProvider with ChangeNotifier {
 
   /// Get artwork URL for a player from cache
   String? getCachedArtworkUrl(String playerId, {int size = 512}) {
-    final track = getCachedTrackForPlayer(playerId);
-    if (track == null) return null;
-    return getImageUrl(track, size: size);
+    return _imageHelper?.getCachedArtworkUrl(playerId, size: size);
   }
 
   /// Clear cached track for a player (e.g., after queue transfer)
@@ -940,8 +925,8 @@ class MusicAssistantProvider with ChangeNotifier {
   Future<void> _loadPodcastCoverCache() async {
     try {
       final cache = await SettingsService.getPodcastCoverCache();
-      if (cache.isNotEmpty) {
-        _podcastCoverCache.addAll(cache);
+      if (cache.isNotEmpty && _imageHelper != null) {
+        await _imageHelper!.loadPodcastCoverCache(cache);
         _logger.log('📦 Loaded ${cache.length} podcast covers from cache (instant high-res)');
       }
     } catch (e) {
@@ -1046,6 +1031,12 @@ class MusicAssistantProvider with ChangeNotifier {
       _api?.dispose();
 
       _api = MusicAssistantAPI(serverUrl, _authManager);
+
+      // Initialize image helper service with API reference
+      _imageHelper = ImageHelperService(
+        api: _api,
+        getCachedTrackForPlayer: (playerId) => _cacheService.getCachedTrackForPlayer(playerId),
+      );
 
       _connectionStateSubscription?.cancel();
       _connectionStateSubscription = _api!.connectionState.listen(
@@ -5105,18 +5096,18 @@ class MusicAssistantProvider with ChangeNotifier {
   /// Load high-resolution podcast covers from iTunes in background
   /// iTunes provides 800x800 artwork for most podcasts (reduced from 1400 for efficiency)
   Future<void> _loadPodcastCoversInBackground() async {
-    if (_api == null) return;
+    if (_api == null || _imageHelper == null) return;
 
     for (final podcast in _podcasts) {
       try {
         // Skip if already cached (either in memory or loaded from persistence)
-        if (_podcastCoverCache.containsKey(podcast.itemId)) continue;
+        if (_imageHelper!.podcastCoverCache.containsKey(podcast.itemId)) continue;
 
         // Try iTunes for high-res artwork
         final itunesArtwork = await _api!.getITunesPodcastArtwork(podcast.name);
 
         if (itunesArtwork != null) {
-          _podcastCoverCache[podcast.itemId] = itunesArtwork;
+          _imageHelper!.updatePodcastCoverCache(podcast.itemId, itunesArtwork);
           _logger.log('🎙️ Cached iTunes artwork for ${podcast.name}');
 
           // Persist to storage for instant display on next launch
@@ -5250,33 +5241,20 @@ class MusicAssistantProvider with ChangeNotifier {
   }
 
   String? getImageUrl(MediaItem item, {int size = 256}) {
-    return _api?.getImageUrl(item, size: size);
+    return _imageHelper?.getImageUrl(item, size: size);
   }
 
   /// Get best available podcast cover URL
   /// Returns cached iTunes URL (800x800) if available, otherwise falls back to MA imageproxy
   /// The cache is persisted to storage and loaded on app start for instant high-res display
   String? getPodcastImageUrl(MediaItem podcast, {int size = 256}) {
-    // Return cached iTunes URL if available (persisted across app launches)
-    final cachedUrl = _podcastCoverCache[podcast.itemId];
-    if (cachedUrl != null) {
-      return cachedUrl;
-    }
-    // Fall back to MA imageproxy (will be replaced once iTunes fetch completes)
-    return _api?.getImageUrl(podcast, size: size);
+    return _imageHelper?.getPodcastImageUrl(podcast, size: size);
   }
 
   /// Get artist image URL with fallback to external sources (Deezer, Fanart.tv)
   /// Returns a Future since fallback requires async API calls
   Future<String?> getArtistImageUrlWithFallback(Artist artist, {int size = 256}) async {
-    // Try Music Assistant first
-    final maUrl = _api?.getImageUrl(artist, size: size);
-    if (maUrl != null) {
-      return maUrl;
-    }
-
-    // Fall back to external sources (Deezer, Fanart.tv, etc.)
-    return MetadataService.getArtistImageUrl(artist.name);
+    return _imageHelper?.getArtistImageUrlWithFallback(artist, size: size);
   }
 
   // ============================================================================
