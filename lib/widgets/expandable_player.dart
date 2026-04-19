@@ -870,7 +870,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
   Future<void> _showPlaybackSpeedPicker() async {
     if (_queue == null) return;
     final speeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-    final currentSpeed = _queue!.speed;
+    final queueSpeed = _queue!.speed;
 
     final selectedSpeed = await showModalBottomSheet<double>(
       context: context,
@@ -887,9 +887,9 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
               ),
               const SizedBox(height: 8),
               ...speeds.map((speed) {
-                final isSelected = (currentSpeed - speed).abs() < 0.001;
+                final isSelected = (queueSpeed - speed).abs() < 0.001;
                 return ListTile(
-                  title: Text('${speed.toStringAsFixed(speed % 1 == 0 ? 0 : 2)}x'),
+                  title: Text(_formatSpeedLabel(speed)),
                   trailing: isSelected ? const Icon(Icons.check_rounded) : null,
                   onTap: () => Navigator.of(context).pop(speed),
                 );
@@ -2166,6 +2166,7 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
     final textColor60 = textColor.withOpacity(MiniPlayerLayout.secondaryTextOpacity);
     final textColor70 = textColor.withOpacity(0.7);
     final textColor45 = textColor.withOpacity(0.45);
+    final queueSpeed = _queue?.speed ?? 1.0;
     final primaryColor20 = primaryColor.withOpacity(0.2);
     final primaryColor70 = primaryColor.withOpacity(0.7);
 
@@ -3290,8 +3291,8 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
                           // Playback speed button
                           _buildUtilityButton(
                             icon: Icons.speed_rounded,
-                            label: '${(_queue?.speed ?? 1.0).toStringAsFixed(((_queue?.speed ?? 1.0) % 1 == 0) ? 0 : 2)}x',
-                            isActive: (_queue?.speed ?? 1.0) != 1.0,
+                            label: _formatSpeedLabel(queueSpeed),
+                            isActive: queueSpeed != 1.0,
                             activeColor: primaryColor,
                             textColor: textColor,
                             onPressed: _showPlaybackSpeedPicker,
@@ -3871,6 +3872,10 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
 
   double _lerpDouble(double a, double b, double t) {
     return a + (b - a) * t;
+  }
+
+  String _formatSpeedLabel(double speed) {
+    return '${speed.toStringAsFixed(speed % 1 == 0 ? 0 : 2)}x';
   }
 
   Widget _buildUtilityButton({
