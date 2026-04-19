@@ -3875,7 +3875,10 @@ class ExpandablePlayerState extends State<ExpandablePlayer>
   }
 
   String _formatSpeedLabel(double speed) {
-    return '${speed.toStringAsFixed(speed % 1 == 0 ? 0 : 2)}x';
+    final normalized = speed.toStringAsFixed(2)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+    return '${normalized}x';
   }
 
   Widget _buildUtilityButton({
