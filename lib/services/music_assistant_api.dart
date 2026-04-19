@@ -1968,6 +1968,7 @@ class MusicAssistantAPI {
           int? currentIndex;
           bool? shuffleEnabled;
           String? repeatMode;
+          double? playbackSpeed;
 
           try {
             final queueResponse = await _sendCommand(
@@ -1981,9 +1982,14 @@ class MusicAssistantAPI {
               currentIndex = queueResult['current_index'] as int?;
               shuffleEnabled = queueResult['shuffle_enabled'] as bool?;
               repeatMode = queueResult['repeat_mode'] as String?;
+              playbackSpeed = (queueResult['playback_speed'] as num?)?.toDouble();
               _logger.debug('🔀 Queue metadata: shuffle_enabled=$shuffleEnabled, repeat_mode=$repeatMode');
 
               final currentItemData = queueResult['current_item'] as Map<String, dynamic>?;
+              if (playbackSpeed == null && currentItemData != null) {
+                final extraAttributes = currentItemData['extra_attributes'] as Map?;
+                playbackSpeed = (extraAttributes?['playback_speed'] as num?)?.toDouble();
+              }
               final currentItemName = currentItemData?['name'] as String?;
               final totalItems = queueResult['items'] as int?;
 
@@ -2033,6 +2039,7 @@ class MusicAssistantAPI {
             currentIndex: currentIndex,
             shuffleEnabled: shuffleEnabled,
             repeatMode: repeatMode,
+            playbackSpeed: playbackSpeed,
           );
         } catch (e) {
           _logger.log('Error getting queue: $e');
@@ -2672,6 +2679,23 @@ class MusicAssistantAPI {
       );
     } catch (e) {
       _logger.log('Error seeking: $e');
+      rethrow;
+    }
+  }
+
+  /// Set queue playback speed (0.5 - 2.0)
+  Future<void> setPlaybackSpeed(String queueId, double speed, {String? queueItemId}) async {
+    try {
+      await _sendCommand(
+        'player_queues/set_playback_speed',
+        args: {
+          'queue_id': queueId,
+          'speed': speed.clamp(0.5, 2.0),
+          if (queueItemId != null) 'queue_item_id': queueItemId,
+        },
+      );
+    } catch (e) {
+      _logger.log('Error setting playback speed: $e');
       rethrow;
     }
   }

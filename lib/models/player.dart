@@ -407,6 +407,7 @@ class PlayerQueue {
   final int? currentIndex;
   final bool? shuffleEnabled;
   final String? repeatMode; // 'off', 'one', 'all'
+  final double? playbackSpeed; // 0.5 - 2.0, null = default 1.0
 
   PlayerQueue({
     required this.playerId,
@@ -414,12 +415,14 @@ class PlayerQueue {
     this.currentIndex,
     this.shuffleEnabled,
     this.repeatMode,
+    this.playbackSpeed,
   });
 
   bool get shuffle => shuffleEnabled ?? false;
   bool get repeatAll => repeatMode == 'all';
   bool get repeatOne => repeatMode == 'one';
   bool get repeatOff => repeatMode == 'off' || repeatMode == null;
+  double get speed => playbackSpeed ?? 1.0;
 
   factory PlayerQueue.fromJson(Map<String, dynamic> json) {
     return PlayerQueue(
@@ -431,6 +434,7 @@ class PlayerQueue {
       currentIndex: json['current_index'] as int?,
       shuffleEnabled: json['shuffle_enabled'] as bool?,
       repeatMode: json['repeat_mode'] as String?,
+      playbackSpeed: (json['playback_speed'] as num?)?.toDouble(),
     );
   }
 
@@ -441,6 +445,7 @@ class PlayerQueue {
       if (currentIndex != null) 'current_index': currentIndex,
       if (shuffleEnabled != null) 'shuffle_enabled': shuffleEnabled,
       if (repeatMode != null) 'repeat_mode': repeatMode,
+      if (playbackSpeed != null) 'playback_speed': playbackSpeed,
     };
   }
 

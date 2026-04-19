@@ -6542,6 +6542,15 @@ class MusicAssistantProvider with ChangeNotifier {
     await setRepeatMode(queueId, nextMode);
   }
 
+  Future<void> setPlaybackSpeed(String queueId, double speed, {String? queueItemId}) async {
+    try {
+      await _api?.setPlaybackSpeed(queueId, speed, queueItemId: queueItemId);
+    } catch (e) {
+      ErrorHandler.logError('Set playback speed', e);
+      rethrow;
+    }
+  }
+
   @override
   void dispose() {
     _playerStateTimer?.cancel();
