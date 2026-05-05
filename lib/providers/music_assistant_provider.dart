@@ -240,6 +240,22 @@ class MusicAssistantProvider with ChangeNotifier {
     };
   }
 
+  /// Check if a server player ID matches our local builtin player ID.
+  /// MA beta 14+ wraps Sendspin player IDs with 'up' prefix and lowercases
+  /// them when merging into universal_player entities, so we need flexible matching.
+  /// e.g. local "ensemble_Chris_CP21.260" matches server "upensemble_chris_cp21.260"
+  bool _isBuiltinPlayer(String serverPlayerId, String builtinPlayerId) {
+    if (serverPlayerId == builtinPlayerId) return true;
+    return serverPlayerId.toLowerCase() == 'up${builtinPlayerId.toLowerCase()}' ||
+           serverPlayerId.toLowerCase() == builtinPlayerId.toLowerCase();
+  }
+
+  /// Check if a server player ID is an Ensemble player (this or other device)
+  bool _isEnsemblePlayer(String serverPlayerId) {
+    final lower = serverPlayerId.toLowerCase();
+    return lower.startsWith('ensemble_') || lower.startsWith('upensemble_');
+  }
+
   /// Player filter from MA user settings (empty = all players allowed)
   List<String> get playerFilter => _playerFilter;
 
@@ -4171,8 +4187,8 @@ class MusicAssistantProvider with ChangeNotifier {
       // Smart sort: local player first, then playing, then on, then off
       players.sort((a, b) {
         // Local player always first
-        final aIsLocal = builtinPlayerId != null && a.playerId == builtinPlayerId;
-        final bIsLocal = builtinPlayerId != null && b.playerId == builtinPlayerId;
+        final aIsLocal = builtinPlayerId != null && _isBuiltinPlayer(a.playerId, builtinPlayerId);
+        final bIsLocal = builtinPlayerId != null && _isBuiltinPlayer(b.playerId, builtinPlayerId);
         if (aIsLocal && !bIsLocal) return -1;
         if (bIsLocal && !aIsLocal) return 1;
 
@@ -4249,8 +4265,8 @@ class MusicAssistantProvider with ChangeNotifier {
           return false;
         }
 
-        if (player.playerId.startsWith('ensemble_')) {
-          if (builtinPlayerId == null || player.playerId != builtinPlayerId) {
+        if (_isEnsemblePlayer(player.playerId)) {
+          if (builtinPlayerId == null || !_isBuiltinPlayer(player.playerId, builtinPlayerId)) {
             _logger.log('🚫 Filtering out other device\'s player: ${player.name}');
             filteredCount++;
             return false;
@@ -4258,7 +4274,7 @@ class MusicAssistantProvider with ChangeNotifier {
         }
 
         if (!player.available) {
-          if (builtinPlayerId != null && player.playerId == builtinPlayerId) {
+          if (builtinPlayerId != null && _isBuiltinPlayer(player.playerId, builtinPlayerId)) {
             return true;
           }
           filteredCount++;
@@ -4482,7 +4498,7 @@ class MusicAssistantProvider with ChangeNotifier {
         // Try available first, then accept unavailable (Sendspin may still be registering)
         if (playerToSelect == null && builtinPlayerId != null) {
           playerToSelect = _availablePlayers.cast<Player?>().firstWhere(
-            (p) => p!.playerId == builtinPlayerId && p.available,
+            (p) => _isBuiltinPlayer(p!.playerId, builtinPlayerId) && p.available,
             orElse: () => null,
           );
           if (playerToSelect != null) {
@@ -4490,7 +4506,7 @@ class MusicAssistantProvider with ChangeNotifier {
           } else {
             // Player exists but not yet available (Sendspin registration in progress)
             playerToSelect = _availablePlayers.cast<Player?>().firstWhere(
-              (p) => p!.playerId == builtinPlayerId,
+              (p) => _isBuiltinPlayer(p!.playerId, builtinPlayerId),
               orElse: () => null,
             );
             if (playerToSelect != null) {
@@ -4568,7 +4584,7 @@ class MusicAssistantProvider with ChangeNotifier {
 
     // Switch audio handler mode based on player type
     final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
-    final isBuiltinPlayer = builtinPlayerId != null && player.playerId == builtinPlayerId;
+    final isBuiltinPlayer = builtinPlayerId != null && _isBuiltinPlayer(player.playerId, builtinPlayerId);
     if (isBuiltinPlayer) {
       audioHandler.setLocalMode();
       // Update notification for builtin player using local mode method (keeps pause working)
@@ -5355,7 +5371,7 @@ class MusicAssistantProvider with ChangeNotifier {
         final track = _currentTrack!;
         final artworkUrl = _api?.getImageUrl(track, size: 512);
         final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
-        final isBuiltinPlayer = builtinPlayerId != null && _selectedPlayer!.playerId == builtinPlayerId;
+        final isBuiltinPlayer = builtinPlayerId != null && _isBuiltinPlayer(_selectedPlayer!.playerId, builtinPlayerId);
 
         if (isBuiltinPlayer) {
           // Local playback - use local mode notification (keeps pause working)
@@ -5401,7 +5417,7 @@ class MusicAssistantProvider with ChangeNotifier {
       } else {
         // No queue data available from API
         final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
-        final isBuiltinPlayer = builtinPlayerId != null && _selectedPlayer!.playerId == builtinPlayerId;
+        final isBuiltinPlayer = builtinPlayerId != null && _isBuiltinPlayer(_selectedPlayer!.playerId, builtinPlayerId);
 
         // For builtin player, try to preserve cached track data since queue API doesn't return it
         // The cached track was set in selectPlayer() and contains valid data
@@ -5498,7 +5514,7 @@ class MusicAssistantProvider with ChangeNotifier {
       // Sendspin PCM streaming has ~5s buffering delay on resume.
       // For audiobooks, seek back to compensate so the user doesn't miss narration.
       final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
-      if (builtinPlayerId != null && playerId == builtinPlayerId && _sendspinConnected && isPlayingAudiobook) {
+      if (builtinPlayerId != null && _isBuiltinPlayer(playerId, builtinPlayerId) && _sendspinConnected && isPlayingAudiobook) {
         final pos = _positionTracker.currentPosition.inSeconds;
         if (pos > 10) {
           _logger.log('📚 Seeking back 10s to compensate for Sendspin buffering');
@@ -6079,7 +6095,7 @@ class MusicAssistantProvider with ChangeNotifier {
       // Get builtin player ID - this is cached so should be fast
       final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
 
-      if (builtinPlayerId != null && playerId == builtinPlayerId && _sendspinConnected) {
+      if (builtinPlayerId != null && _isBuiltinPlayer(playerId, builtinPlayerId) && _sendspinConnected) {
         _logger.log('⏸️ Non-blocking local pause for builtin player');
 
         // CRITICAL: Don't await these - they can block the UI thread
@@ -6181,7 +6197,7 @@ class MusicAssistantProvider with ChangeNotifier {
     try {
       // Optimistic local stop for builtin player on skip - non-blocking
       final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
-      if (builtinPlayerId != null && playerId == builtinPlayerId && _sendspinConnected) {
+      if (builtinPlayerId != null && _isBuiltinPlayer(playerId, builtinPlayerId) && _sendspinConnected) {
         _logger.log('⏭️ Non-blocking local stop for skip on builtin player');
         // Stop current audio immediately - fire and forget, but log errors
         unawaited((_pcmAudioPlayer?.pause() ?? Future.value()).catchError(
@@ -6200,7 +6216,7 @@ class MusicAssistantProvider with ChangeNotifier {
     try {
       // Optimistic local stop for builtin player on previous - non-blocking
       final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
-      if (builtinPlayerId != null && playerId == builtinPlayerId && _sendspinConnected) {
+      if (builtinPlayerId != null && _isBuiltinPlayer(playerId, builtinPlayerId) && _sendspinConnected) {
         _logger.log('⏮️ Non-blocking local stop for previous on builtin player');
         // Stop current audio immediately - fire and forget, but log errors
         unawaited((_pcmAudioPlayer?.pause() ?? Future.value()).catchError(
@@ -6614,7 +6630,7 @@ class MusicAssistantProvider with ChangeNotifier {
       }
 
       final builtinPlayerId = await SettingsService.getBuiltinPlayerId();
-      if (builtinPlayerId != null && playerId == builtinPlayerId) {
+      if (builtinPlayerId != null && _isBuiltinPlayer(playerId, builtinPlayerId)) {
         _localPlayerVolume = volumeLevel;
         FlutterVolumeController.setVolume(volumeLevel / 100.0);
       }
