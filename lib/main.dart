@@ -134,6 +134,16 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
   StreamSubscription? _absoluteVolumeSub;
   String? _lastSelectedPlayerId;
   String? _builtinPlayerId;
+  // Track last known playing state to avoid redundant setMAPlayingState calls
+  bool _lastKnownPlayingState = false;
+
+  // Tracks accumulated MA volume during rapid lockscreen presses.
+  // player.volume lags behind async setVolume calls, so without this
+  // rapid presses all step from the same stale base and most are no-ops.
+  int? _lastSteppedVolume;
+  // Clears _lastSteppedVolume after inactivity so it falls back to the
+  // real player.volume (which may have changed via in-app slider or web UI).
+  Timer? _steppedVolumeExpiry;
 
   // Volume step size (percentage points per button press)
   static const int _volumeStep = 5;
@@ -166,20 +176,48 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
 
       // Listen for absolute volume changes from lockscreen/background
       // (ContentObserver on system STREAM_MUSIC volume)
-      _absoluteVolumeSub = _hardwareVolumeService.onAbsoluteVolumeChange.listen((volume) {
-        _setAbsoluteVolume(volume);
+      _absoluteVolumeSub = _hardwareVolumeService.onAbsoluteVolumeChange.listen((event) {
+        _setAbsoluteVolume(event.volume, event.direction, event.delta);
       });
     } catch (e, stack) {
       _logger.error('Hardware volume init failed', context: 'VolumeInit', error: e, stackTrace: stack);
     }
   }
 
-  /// Called when provider state changes - check if selected player changed
+  /// Called when provider state changes - check if selected player changed or playback state changed
   void _onProviderChanged() {
     final currentPlayerId = _musicProvider.selectedPlayer?.playerId;
     if (currentPlayerId != _lastSelectedPlayerId) {
       _lastSelectedPlayerId = currentPlayerId;
       _updateVolumeInterception();
+    }
+
+    // Keep the native volume observer in sync with the current playback state.
+    // This allows the observer to suppress mirroring when MA is not streaming.
+    final isPlaying = _musicProvider.selectedPlayer?.isPlaying ?? false;
+    if (isPlaying != _lastKnownPlayingState) {
+      _lastKnownPlayingState = isPlaying;
+      _hardwareVolumeService.setMAPlayingState(isPlaying);
+
+      // Re-sync system volume when playback starts or resumes.
+      // While MA was paused the observer suppressed events, so the system
+      // volume may have drifted (e.g. user adjusted it for YouTube).
+      // Snapping the system volume back to MA here means the next hardware
+      // button press starts from a known-good sync point.
+      if (isPlaying) {
+        _lastSteppedVolume = null;
+        _steppedVolumeExpiry?.cancel();
+        final player = _musicProvider.selectedPlayer;
+        if (player != null &&
+            !(_builtinPlayerId != null && player.playerId == _builtinPlayerId)) {
+          final vol = _musicProvider.groupVolumeManager.isGroupPlayer(player)
+              ? (_musicProvider.groupVolumeManager.getEffectiveVolumeLevel(
+                      player, _musicProvider.availablePlayersUnfiltered) ??
+                  player.volume)
+              : player.volume;
+          _hardwareVolumeService.syncSystemVolume(vol);
+        }
+      }
     }
   }
 
@@ -228,17 +266,49 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
   }
 
   /// Handle absolute volume change from lockscreen/background.
-  /// Called when the ContentObserver detects a system volume change
-  /// while a remote/group player is active.
-  Future<void> _setAbsoluteVolume(int volume) async {
+  /// Always steps MA by the per-step delta in the button direction — never
+  /// mirrors the system volume value directly, so volume jumps are impossible.
+  /// The delta matches the system volume step size (mapped to 0-100) so MA
+  /// changes at the same rate as the system HUD when the button is held.
+  /// The native layer resets system volume to midpoint after each event so
+  /// the ContentObserver always has room in both directions.
+  Future<void> _setAbsoluteVolume(int systemVolume, int direction, int delta) async {
     final player = _musicProvider.selectedPlayer;
     if (player == null) return;
 
-    // Don't route to builtin player - that's handled by the system directly
+    // Don't route to builtin player — handled by the system directly.
     if (_builtinPlayerId != null && player.playerId == _builtinPlayerId) return;
+    if (direction == 0) return; // No actual change
+
+    // Use the native per-step delta so MA tracks the system rate of change.
+    // Fall back to _volumeStep if delta is missing or zero.
+    final step = delta > 0 ? delta : _volumeStep;
+
+    // Use tracked value for rapid presses (player.volume lags behind async
+    // setVolume calls — without this, repeated presses step from the same
+    // stale base and most are silently dropped).
+    final currentMA = _lastSteppedVolume ??
+        (_musicProvider.groupVolumeManager.isGroupPlayer(player)
+            ? (_musicProvider.groupVolumeManager.getEffectiveVolumeLevel(
+                    player, _musicProvider.availablePlayersUnfiltered) ??
+                player.volume)
+            : player.volume);
+
+    final newMA = (currentMA + direction * step).clamp(0, 100);
+    if (newMA == currentMA) return; // At boundary
+
+    // Track synchronously so the next rapid press uses this as its base.
+    _lastSteppedVolume = newMA;
+
+    // Clear tracked value after 1.5s of inactivity so we fall back to the
+    // real player.volume (which may have been changed via slider or web UI).
+    _steppedVolumeExpiry?.cancel();
+    _steppedVolumeExpiry = Timer(const Duration(milliseconds: 1500), () {
+      _lastSteppedVolume = null;
+    });
 
     try {
-      await _musicProvider.setVolume(player.playerId, volume.clamp(0, 100));
+      await _musicProvider.setVolume(player.playerId, newMA);
     } catch (e) {
       _logger.error('Lockscreen volume change failed', context: 'VolumeControl', error: e);
     }
@@ -250,6 +320,7 @@ class _MusicAssistantAppState extends State<MusicAssistantApp> with WidgetsBindi
     _volumeUpSub?.cancel();
     _volumeDownSub?.cancel();
     _absoluteVolumeSub?.cancel();
+    _steppedVolumeExpiry?.cancel();
     _hardwareVolumeService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

@@ -1,0 +1,6 @@
+No supported devices found with name or id matching 'Medium_Phone_API_36.1'.
+
+The following devices were found:
+Windows (desktop) ΓÇó windows ΓÇó windows-x64    ΓÇó Microsoft Windows [Version 10.0.26200.7840]
+Chrome (web)      ΓÇó chrome  ΓÇó web-javascript ΓÇó Google Chrome 145.0.7632.77
+Edge (web)        ΓÇó edge    ΓÇó web-javascript ΓÇó Microsoft Edge 145.0.3800.70

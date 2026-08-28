@@ -22,15 +22,16 @@ class HardwareVolumeService {
 
   final _volumeUpController = StreamController<void>.broadcast();
   final _volumeDownController = StreamController<void>.broadcast();
-  final _absoluteVolumeController = StreamController<int>.broadcast();
+  final _absoluteVolumeController = StreamController<({int volume, int direction, int delta})>.broadcast();
 
   Stream<void> get onVolumeUp => _volumeUpController.stream;
   Stream<void> get onVolumeDown => _volumeDownController.stream;
 
-  /// Stream of absolute volume values (0-100) from lockscreen hardware buttons.
-  /// Fires when the system STREAM_MUSIC volume changes while the volume
-  /// observer is active (remote/group player selected, app in background).
-  Stream<int> get onAbsoluteVolumeChange => _absoluteVolumeController.stream;
+  /// Stream of volume changes from lockscreen hardware buttons.
+  /// Each event contains `volume` (0-100 mapped system volume),
+  /// `direction` (+1 for vol-up, -1 for vol-down), and `delta` (per-step
+  /// size mapped to 0-100 scale) from the native layer.
+  Stream<({int volume, int direction, int delta})> get onAbsoluteVolumeChange => _absoluteVolumeController.stream;
 
   bool _isListening = false;
   bool get isListening => _isListening;
@@ -55,8 +56,13 @@ class HardwareVolumeService {
           break;
         case 'absoluteVolumeChange':
           // Volume changed from lockscreen/background via ContentObserver
-          final volume = call.arguments as int? ?? 0;
-          _absoluteVolumeController.add(volume);
+          // Native sends a map with 'volume' (0-100), 'direction' (+1/-1),
+          // and 'delta' (per-step size mapped to 0-100 scale).
+          final args = call.arguments as Map;
+          final volume = (args['volume'] as int?) ?? 0;
+          final direction = (args['direction'] as int?) ?? 0;
+          final delta = (args['delta'] as int?) ?? 0;
+          _absoluteVolumeController.add((volume: volume, direction: direction, delta: delta));
           break;
       }
     });
@@ -117,6 +123,18 @@ class HardwareVolumeService {
       _logger.info('Volume observer stopped', context: 'VolumeService');
     } catch (e) {
       _logger.error('Failed to stop volume observer', context: 'VolumeService', error: e);
+    }
+  }
+
+  /// Notify the native layer whether MA is actively playing.
+  /// The volume observer uses this flag to suppress mirroring when MA is
+  /// paused, idle, disconnected, or not the active audio source.
+  Future<void> setMAPlayingState(bool isPlaying) async {
+    try {
+      await _channel.invokeMethod('setMAPlayingState', {'isPlaying': isPlaying});
+      _logger.info('MA playing state set to $isPlaying', context: 'VolumeService');
+    } catch (e) {
+      _logger.error('Failed to set MA playing state', context: 'VolumeService', error: e);
     }
   }
 
